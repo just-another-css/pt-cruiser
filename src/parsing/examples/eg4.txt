@@ -1,0 +1,1 @@
+Quad = {points = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0)], faces = [{points = [0, 1, 2], material = "metal"}, {points = [0, 2, 3], material = "metal"}], material = "metal"}

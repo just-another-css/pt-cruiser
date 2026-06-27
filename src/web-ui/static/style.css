@@ -1,0 +1,172 @@
+.title {
+    font-family: Helvetica, sans-serif;
+    text-align: center;
+}
+
+.workspace {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    padding: 16px;
+    height: calc(100vh - 120px); /* adjust for your title height */
+}
+
+.code-editor {
+    background: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: "SF Mono", "Fira Code", Consolas, monospace;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    flex: 1;              /* takes the left half */
+}
+
+.title-bar {
+    background: #323233;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.filename {
+    color: #888;
+    font-size: 13px;
+}
+
+#code-input {
+    flex: 1;                      /* fills the rest of the editor box */
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 16px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    tab-size: 4;
+    white-space: pre;             /* no line wrapping, like a real editor */
+    overflow: auto;
+}
+
+.output-div {
+    background: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: "SF Mono", "Fira Code", Consolas, monospace;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    flex: 1;              /* takes the left half */
+}
+
+.output-div pre {
+    margin: 0;
+    padding: 16px;
+    color: #d4d4d4;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+.code-editor form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;        /* lets the textarea actually shrink/scroll */
+    padding: 8px;
+    gap: 8px;
+}
+
+#code-input {
+    flex: 1;
+    min-height: 0;        /* same reason — prevents overflow blowout */
+    /* your existing styles stay */
+}
+
+.code-editor input[type="submit"] {
+    flex-shrink: 0;       /* stays its natural height at the bottom */
+    align-self: stretch;  /* or use a fixed width / margin-left:auto to right-align */
+    padding: 10px;
+    background: #0e639c;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.toggle-label {
+  color: white;
+  font-family: inherit;
+}

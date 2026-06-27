@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <title>Extension - Pathtracer</title>
+</head>
+<body>
+<h1 class="title" id="main-title">CUDA Pathtracing</h1>
+<div class="workspace">
+        <div class="code-editor" id="code-section">
+            <div class="title-bar">
+                <span class="filename">scene.trace</span>
+            </div>
+            <form method="get">
+                <textarea id="code-input" spellcheck="false" placeholder="Enter your scene here...">{{ code_content | e }}</textarea>
+                <div class="toggle-row">
+                  <label class="switch">
+                    <input type="checkbox" id="usegl">
+                    <span class="slider round"></span>
+                  </label>
+                  <span class="toggle-label">Use OpenGL</span>
+                </div>
+                <input type="submit" value="Generate image" id="generate">
+            </form>
+        </div>
+    <div class="output-div" id="output-section">
+         <div class="title-bar">
+            <span class="filename">Console</span>
+        </div>
+        <pre id="output"><code>Output will be displayed here...</code>
+            <img src="{{ url_for('static', filename='Screenshot_20260615_230333.png') }}" hidden="hidden">
+        </pre>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

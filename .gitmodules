@@ -1,0 +1,6 @@
+[submodule "src/include/stb"]
+	path = src/include/stb
+	url = https://github.com/nothings/stb.git
+[submodule "src/include/optix-dev"]
+	path = src/include/optix-dev
+	url = https://github.com/NVIDIA/optix-dev

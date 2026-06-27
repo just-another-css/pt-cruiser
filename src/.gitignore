@@ -1,0 +1,15 @@
+# Ignore build files
+build/
+render
+
+# Include CMakeLists
+!CMakeLists.txt
+render
+
+# Testing file
+parsing/lexer_test
+*.jpg
+
+# Include example test files
+!examples/*.txt
+web-ui/subprocess

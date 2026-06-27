@@ -1,0 +1,1 @@
+BadMat = {points = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)], faces = [{points = [0, 1, 2], material = "wood"}], material = "wood"}
