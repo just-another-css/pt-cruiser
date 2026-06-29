@@ -497,14 +497,15 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
         CUDA_CHECK(cudaGetLastError());
     }
     // Free buffers
+    CUDA_CHECK(cudaFree(rand_states));
     CUDA_CHECK(cudaFree(top_left_corners));
     CUDA_CHECK(cudaFree(left_rights));
     CUDA_CHECK(cudaFree(top_bottoms));
-    CUDA_CHECK(cudaFree(rand_states));
     CUDA_CHECK(cudaFree(ray_dirs));
     CUDA_CHECK(cudaFree(ray_origins));
     CUDA_CHECK(cudaFree(ray_throughputs));
     CUDA_CHECK(cudaFree(ray_values));
+    CUDA_CHECK(cudaFree(last_ray_collisions));
     CUDA_CHECK(cudaFree(ray_refr_inds));
     CUDA_CHECK(cudaFree(ray_light_ints));
     CUDA_CHECK(cudaFree(next_step));
