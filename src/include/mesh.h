@@ -11,6 +11,7 @@ typedef struct {
     float3 *vertices;
     float2 *uv;
     Material *materials;
+    float3 *lightings;
 } PointsMesh;
 
 typedef struct {
@@ -21,6 +22,7 @@ typedef struct {
     float2 *uv_a, *uv_ab, *uv_ac;
     BoundBoxes aabbs;
     Material *materials;
+    float3 *lightings;
 } TriangleMesh;
 
 // Initialising TriangleMesh

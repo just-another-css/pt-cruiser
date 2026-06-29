@@ -5,7 +5,7 @@
 __constant__ TriangleObjects objects_dev;
 TriangleObjects objects;
 
-__global__ void calc_triangle_data(int** a_devs, int** b_devs, int** c_devs, float3** vertices_devs, float2** uv_devs) {
+__global__ void calc_triangle_data(int** a_devs, int** b_devs, int** c_devs, float3** vertices_devs, float2** uv_devs, int* num_lit_faces) {
     int obj = blockIdx.y * blockDim.y + threadIdx.y; // object
     if (obj >= objects_dev.num_objects) return;
     int tri = blockIdx.x * blockDim.x + threadIdx.x; // triangle
@@ -35,31 +35,29 @@ __global__ void calc_triangle_data(int** a_devs, int** b_devs, int** c_devs, flo
     // Calculate triangle AABB
     mesh->aabbs.pt_min[tri] = vec_min(a, vec_min(b, c));
     mesh->aabbs.pt_max[tri] = vec_max(a, vec_max(b, c));
+    // Identify if object is a light source
+    if (nonzero_vec(mesh->lightings[tri])) atomicAdd(num_lit_faces + obj, 1);
 }
 
-static void calculate_mesh_vectors(int** a_devs, int** b_devs, int** c_devs, float3** vertices_devs, float2** uv_devs) {
+static void calculate_mesh_vectors(int** a_devs, int** b_devs, int** c_devs, float3** vertices_devs, float2** uv_devs, int* num_lit_faces) {
     dim3 block;
     block.x = 32;
     block.y = 1;
     dim3 grid;
     grid.x = (objects.max_tri_count + block.x - 1) / block.x;
     grid.y = (objects.num_objects + block.y - 1) / block.y;
-    calc_triangle_data<<<grid, block>>>(a_devs, b_devs, c_devs, vertices_devs, uv_devs);
+    calc_triangle_data<<<grid, block>>>(a_devs, b_devs, c_devs, vertices_devs, uv_devs, num_lit_faces);
 }
 
-void initialise_objects(int num_objects, float3* lightings, PointsMesh* meshes) {
-    // Copy lightings to device
-    float3* lightings_dev;
-    CUDA_CHECK(cudaMalloc(&lightings_dev, num_objects * sizeof(float3)));
-    CUDA_CHECK(cudaMemcpy(lightings_dev, lightings, num_objects * sizeof(float3), cudaMemcpyHostToDevice));
+void initialise_objects(int num_objects, PointsMesh* meshes, int** light_source_objs) {
     // Initialise host objects list
     objects.num_objects = num_objects;
     objects.max_tri_count = 0;
-    objects.lightings = lightings_dev;
     objects.meshes = (TriangleMesh*) malloc(num_objects * sizeof(TriangleMesh));
     if (objects.meshes == nullptr) {
         printf("null pointer of object meshes");
     }
+    *light_source_objs = (int*) malloc(num_objects * sizeof(int));
     // Allocate and copy object mesh data to device and store pointers in meshes array in host objects struct
     int** a_devs = (int**) malloc(num_objects * sizeof(int*));
     int** b_devs = (int**) malloc(num_objects * sizeof(int*));
@@ -81,8 +79,10 @@ void initialise_objects(int num_objects, float3* lightings, PointsMesh* meshes) 
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].aabbs.pt_min, meshes[obj].triangle_count * sizeof(float3)));
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].aabbs.pt_max, meshes[obj].triangle_count * sizeof(float3)));
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].materials, meshes[obj].triangle_count * sizeof(Material)));
+        CUDA_CHECK(cudaMalloc(&objects.meshes[obj].lightings, meshes[obj].triangle_count * sizeof(float3)));
         // Copy data to TriangleMesh
         CUDA_CHECK(cudaMemcpy(objects.meshes[obj].materials, meshes[obj].materials, meshes[obj].triangle_count * sizeof(Material), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(objects.meshes[obj].lightings, meshes[obj].lightings, meshes[obj].triangle_count * sizeof(float3), cudaMemcpyHostToDevice));
         // Allocate space for data on device for processing
         CUDA_CHECK(cudaMalloc(&a_devs[obj], meshes[obj].triangle_count * sizeof(int)));
         CUDA_CHECK(cudaMalloc(&b_devs[obj], meshes[obj].triangle_count * sizeof(int)));
@@ -107,18 +107,23 @@ void initialise_objects(int num_objects, float3* lightings, PointsMesh* meshes) 
     int **a_devs_dev, **b_devs_dev, **c_devs_dev;
     float3** vertices_devs_dev;
     float2** uv_devs_dev;
+    int* is_light_source_dev;
     CUDA_CHECK(cudaMalloc(&a_devs_dev, num_objects * sizeof(int*)));
     CUDA_CHECK(cudaMalloc(&b_devs_dev, num_objects * sizeof(int*)));
     CUDA_CHECK(cudaMalloc(&c_devs_dev, num_objects * sizeof(int*)));
     CUDA_CHECK(cudaMalloc(&vertices_devs_dev, num_objects * sizeof(float3*)));
     CUDA_CHECK(cudaMalloc(&uv_devs_dev, num_objects * sizeof(float2*)));
+    CUDA_CHECK(cudaMalloc(&is_light_source_dev, num_objects * sizeof(int)));
     CUDA_CHECK(cudaMemcpy(a_devs_dev, a_devs, num_objects * sizeof(int*), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(b_devs_dev, b_devs, num_objects * sizeof(int*), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(c_devs_dev, c_devs, num_objects * sizeof(int*), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(vertices_devs_dev, vertices_devs, num_objects * sizeof(float3*), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(uv_devs_dev, uv_devs, num_objects * sizeof(float2*), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(is_light_source_dev, 0, num_objects * sizeof(int)));
     // Calculate mesh edge vectors and normals
-    calculate_mesh_vectors(a_devs_dev, b_devs_dev, c_devs_dev, vertices_devs_dev, uv_devs_dev);
+    calculate_mesh_vectors(a_devs_dev, b_devs_dev, c_devs_dev, vertices_devs_dev, uv_devs_dev, is_light_source_dev);
+    // Retrieve num_lit_faces counts
+    cudaMemcpy(*light_source_objs, is_light_source_dev, num_objects * sizeof(int), cudaMemcpyDeviceToHost);
     // Free mesh data transfer buffers
     for (int obj = 0; obj < num_objects; obj++) {
         CUDA_CHECK(cudaFree(a_devs[obj]));
@@ -132,6 +137,7 @@ void initialise_objects(int num_objects, float3* lightings, PointsMesh* meshes) 
     CUDA_CHECK(cudaFree(c_devs_dev));
     CUDA_CHECK(cudaFree(vertices_devs_dev));
     CUDA_CHECK(cudaFree(uv_devs_dev));
+    CUDA_CHECK(cudaFree(is_light_source_dev));
     free(a_devs);
     free(b_devs);
     free(c_devs);
@@ -140,10 +146,8 @@ void initialise_objects(int num_objects, float3* lightings, PointsMesh* meshes) 
 }
 
 void free_objects(void) {
-    cudaFree(objects.lightings);
     TriangleObjects objects_dev_cpy;
     CUDA_CHECK(cudaMemcpyFromSymbol(&objects_dev_cpy, objects_dev, sizeof(TriangleObjects)));
-    // cudaFree(objects_dev_cpy.lightings); this is double free, as it's freed by objects.lightings already
     for (int obj = 0; obj < objects.num_objects; obj++) {
         free_triangle_mesh(objects.meshes[obj]);
         // free_triangle_mesh(objects_dev_cpy.meshes[obj]); double free as memcpy meshes pointers previously

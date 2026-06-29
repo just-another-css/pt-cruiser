@@ -167,30 +167,33 @@ __device__ static ray_collision find_first_collision(float3 ray_origin, float3 r
     return rct.rc;
 }
 
-// Return the object index of a random light source, weighted by intensity
-__device__ static int find_rand_light_source(curandStatePhilox4_32_10_t* rand_state, int* light_source_i, float* light_source_intensity) {
-    float target = curand_uniform(rand_state); // random value in range (0,1] representing selected cumulative normalised light source intensity
+// Return the object index of a random light source, weighted by power
+__device__ static int find_rand_light_source(curandStatePhilox4_32_10_t* rand_state, int* light_source_i, float* light_source_power) {
+    float target = curand_uniform(rand_state); // random value in range (0,1] representing selected cumulative normalised light source power
     // TODO: binary search to find light source?
     int i_limit = light_sources_dev.num_light_sources;
-    for (int i = 0; i < i_limit; i++) if (light_sources_dev.cum_norm_intensities[i] >= target) {
+    for (int i = 0; i < i_limit; i++) if (light_sources_dev.cum_norm_obj_powers[i] >= target) {
         *light_source_i = i;
-        *light_source_intensity = light_sources_dev.norm_intensities[i];
+        *light_source_power = light_sources_dev.norm_obj_powers[i];
         return light_sources_dev.obj_is[i];
     }
+    // should be unreachable; catch-all case added to ensure valid return vlaue
     *light_source_i = i_limit - 1;
-    *light_source_intensity = light_sources_dev.norm_intensities[i_limit - 1];
-    return light_sources_dev.obj_is[i_limit - 1]; // should be unreachable; catch-all case added to ensure valid return vlaue
+    *light_source_power = light_sources_dev.norm_obj_powers[i_limit - 1];
+    return light_sources_dev.obj_is[i_limit - 1];
 }
 
-__device__ static __forceinline__ float3 calc_rand_ray(int light_source_i, int obj_i, float3 ray_origin, curandStatePhilox4_32_10_t* rand_state) {
+__device__ static __forceinline__ float3 calc_rand_ray(int light_source_i, int obj_i, float3 ray_origin, curandStatePhilox4_32_10_t* rand_state, int* light_source_face_i, float* norm_face_power) {
     // Select random triangle uniformly to cast ray towards
     TriangleMesh *mesh = objects_dev.meshes + obj_i;
-    int tri_count = mesh->triangle_count;
-    int face_i = tri_count - 1; // min((int)(curand_uniform(rand_state) * mesh->triangle_count), mesh->triangle_count - 1); // all triangles included
+    int tri_count = light_sources_dev.num_lit_faces[light_source_i];
+    int face_i = light_sources_dev.face_is[light_source_i][tri_count - 1];
+    *norm_face_power = light_sources_dev.norm_face_powers[light_source_i][tri_count - 1];
     float target = curand_uniform(rand_state);
-    float* cum_norm_triangle_areas = light_sources_dev.cum_norm_triangle_areas[light_source_i];
-    for (int i = 0; i < tri_count; i++) if (cum_norm_triangle_areas[i] >= target) {
-        face_i = i;
+    float* cum_norm_face_powers = light_sources_dev.cum_norm_face_powers[light_source_i];
+    for (int i = 0; i < tri_count; i++) if (cum_norm_face_powers[i] >= target) {
+        face_i = *light_source_face_i = light_sources_dev.face_is[light_source_i][i];
+        *norm_face_power = light_sources_dev.norm_face_powers[light_source_i][i];
         break;
     }
     float u = curand_uniform(rand_state);
@@ -325,25 +328,26 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     // Sample a light source with NEE if not on the first step
     if (!first_step) {
         // if (!x) printf("in step, starting NEE\n");
-        int light_source_i;
-        float light_source_intensity;
-        int light_source_obj_i = find_rand_light_source(rand_state, &light_source_i, &light_source_intensity); // get a random light source
-        float3 light_source_ray = calc_rand_ray(light_source_i, light_source_obj_i, ray_origin, rand_state); // calculate a random vector towards the light source
+        int light_source_i, light_source_face_i;
+        float light_source_power, light_source_face_power;
+        int light_source_obj_i = find_rand_light_source(rand_state, &light_source_i, &light_source_power); // get a random light source
+        float3 light_source_ray = calc_rand_ray(light_source_i, light_source_obj_i, ray_origin, rand_state, &light_source_face_i, &light_source_face_power); // calculate a random vector towards the light source
+        float3 light_source_normal = f4_to_f3(objects_dev.meshes[light_source_i].normals[light_source_face_i]);
         float3 norm_light_source_ray = norm_vec(light_source_ray);
         ray_collision light_source_ray_rc = find_first_collision(ray_origin, norm_light_source_ray); // check first object in ray direction
         // if (!x) printf("in step, sampled, applying\n");
-        if (light_source_ray_rc.obj_i == light_source_obj_i) { // if equal to light source, add contribution
+        if (light_source_ray_rc.obj_i == light_source_obj_i && light_source_ray_rc.face_i == light_source_face_i) { // if equal to light source, add contribution
             ray_collision last_ray_collision = last_ray_collisions[x];
             TriangleMesh* light_source_mesh = objects_dev.meshes + light_source_obj_i;
             float2 light_source_uv = add3_vec2(light_source_mesh->uv_a[light_source_ray_rc.face_i], scale_vec2(light_source_ray_rc.u, light_source_mesh->uv_ab[light_source_ray_rc.face_i]), scale_vec2(light_source_ray_rc.v, light_source_mesh->uv_ac[light_source_ray_rc.face_i]));
             ray_values[x] = add_vec(ray_values[x], multiply3_vec(scale_vec(calc_next_throughput_nee(ray_dir, objects_dev.meshes[last_ray_collision.obj_i].normals[last_ray_collision.face_i], norm_light_source_ray, objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]) *
-                                                                           fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
-                                                                           light_sources_dev.total_triangle_areas[light_source_i] * // inv. of probability of selecting triangle
-                                                                           __frcp_rn(vec_dot_sqr(light_source_ray) * // divide by distance to light
-                                                                                     light_source_intensity), // inv. of probability of selecting light source
-                                                                           ray_thrput), // use material BRDF and NEE ray
-                                                                 objects_dev.lightings[light_source_obj_i], // use object lighting modifier
-                                                                 f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
+                                                                        fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
+                                                                        light_sources_dev.norm_obj_powers[light_source_i] * // inv. of probability of selecting object
+                                                                        light_sources_dev.norm_face_powers[light_source_i][light_source_face_i] * // inv. of probability of selecting face
+                                                                        __frcp_rn(vec_dot_sqr(light_source_ray)), // divide by square of distance to light
+                                                                        ray_thrput), // use material BRDF and NEE ray
+                                                                objects_dev.meshes[light_source_obj_i].lightings[light_source_face_i], // use object lighting modifier
+                                                                f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
         }
     }
     // if (!x) printf("in step, starting pathtracing\n");
@@ -356,7 +360,7 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     TriangleMesh *ray_int_mesh = objects_dev.meshes + ray_int.obj_i;
     Material material = ray_int_mesh->materials[ray_int.face_i];
     // if (!x) printf("in step, the ray lived!!");
-    float3 light_output = objects_dev.lightings[ray_int.obj_i];
+    float3 light_output = objects_dev.meshes[ray_int.obj_i].lightings[ray_int.face_i];
     // Calculate normalised UV coordinate for texture sampling
     float2 ray_int_uv = add3_vec2(ray_int_mesh->uv_a[ray_int.face_i], scale_vec2(ray_int.u, ray_int_mesh->uv_ab[ray_int.face_i]), scale_vec2(ray_int.v, ray_int_mesh->uv_ac[ray_int.face_i]));
     float3 texture_value = f4_to_f3(tex2D<float4>(materials_data.textures[material], ray_int_uv.x, ray_int_uv.y));

@@ -77,12 +77,10 @@ extern FILE *yyin;
 extern int yyerrors;
 extern Scene_t *parsed_scene;
 
-static void parse_input(int *num_objects, PointsMesh **mesh, float3 **lighting) {
+static void parse_input(int *num_objects, PointsMesh **mesh) {
     *num_objects = parsed_scene->len;
     *mesh = (PointsMesh*) malloc(parsed_scene->len * sizeof(PointsMesh));
     MALLOC_CHECK(*mesh);
-    *lighting = (float3*) malloc(parsed_scene->len * sizeof(float3));
-    MALLOC_CHECK(*lighting);
     for (int i = 0; i < parsed_scene->len; i++) {
         int num_triangles = parsed_scene->objects[i].faces->len;
         int num_vertices = parsed_scene->objects[i].points->len;
@@ -98,35 +96,59 @@ static void parse_input(int *num_objects, PointsMesh **mesh, float3 **lighting) 
         MALLOC_CHECK((*mesh)[i].vertices);
         (*mesh)[i].materials = (Material*) malloc(num_triangles * sizeof(Material));
         MALLOC_CHECK((*mesh)[i].materials);
+        (*mesh)[i].lightings = (float3*) malloc(num_triangles * sizeof(float3));
+        MALLOC_CHECK((*mesh)[i].lightings);
         (*mesh)[i].uv = (float2*) malloc(3 * num_triangles * sizeof(float2));
         MALLOC_CHECK((*mesh)[i].uv);
+        bool default_lighting_set = false;
+        float3 default_lighting;
+        for (int a = 0; a < parsed_scene->objects[i].desc_args->len; a++) {
+            if (parsed_scene->objects[i].desc_args->args[a].type == 1) {
+                float value = parsed_scene->objects[i].desc_args->args[a].lighting;
+                default_lighting = make_float3(value, value, value);
+                default_lighting_set = true;
+            }
+        }
         for (int tri = 0; tri < num_triangles; tri++) {
             (*mesh)[i].a[tri] = parsed_scene->objects[i].faces->faces[tri].fst;
             (*mesh)[i].b[tri] = parsed_scene->objects[i].faces->faces[tri].snd;
             (*mesh)[i].c[tri] = parsed_scene->objects[i].faces->faces[tri].thr;
-            bool material_flag = false, uv_flag = false;
+            bool material_flag = false, lighting_flag = false, uv_flag = false;
+            float intensity;
             for (int a = 0; a < parsed_scene->objects[i].faces->faces[tri].desc_args->len; a++) {
-                if (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].type == 0) {
-                    (*mesh)[i].materials[tri] = parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].material;
-                    material_flag = true;
-                }
-                if (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].type == 2) {
-                    if (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->len != 3) {
-                        fprintf(stderr, "[!] A face must have three uvs! Error on object %d face %d\n", i, tri);
-                        exit(EXIT_FAILURE);
-                    }
-                    (*mesh)[i].uv[tri * 3] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[0].x,
-                                                         parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[0].y);
-                    (*mesh)[i].uv[tri * 3 + 1] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].x,
-                                                             parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].y);
-                    (*mesh)[i].uv[tri * 3 + 2] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].x,
-                                                             parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].y);
-                    uv_flag = true;
+                switch (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].type) {
+                    case 0: // material
+                        (*mesh)[i].materials[tri] = parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].material;
+                        material_flag = true;
+                        break;
+                    case 1: // lighting
+                        intensity = parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].lighting;
+                        (*mesh)[i].lightings[tri] = make_float3(intensity, intensity, intensity); // lighting is effectively a scalar applied to the colour of the object's texture
+                        lighting_flag = true;
+                        break;
+                    case 2: // uv
+                        if (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->len != 3) {
+                            fprintf(stderr, "[!] A face must have three uvs! Error on object %d face %d\n", i, tri);
+                            exit(EXIT_FAILURE);
+                        }
+                        (*mesh)[i].uv[tri * 3] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[0].x,
+                                                             parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[0].y);
+                        (*mesh)[i].uv[tri * 3 + 1] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].x,
+                                                                 parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].y);
+                        (*mesh)[i].uv[tri * 3 + 2] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].x,
+                                                                 parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].y);
+                        uv_flag = true;
+                        break;
+                    default:
+                        break;
                 }
             }
             if (!material_flag) {
                 fprintf(stderr, "[!] Material data is missing for object %d, face %d\n", i, tri);
                 exit(EXIT_FAILURE);
+            }
+            if (!lighting_flag) {
+                (*mesh)[i].lightings[tri] = default_lighting_set ? default_lighting : make_float3(0,0,0); // default to unlit or object lighting
             }
             if (!uv_flag) {
                 fprintf(stderr, "[!] UV data is missing for object %d, face %d\n", i, tri);
@@ -140,20 +162,6 @@ static void parse_input(int *num_objects, PointsMesh **mesh, float3 **lighting) 
             Vec_t now_v = parsed_scene->objects[i].points->list[v];
             (*mesh)[i].vertices[v] = make_float3(now_v.x, now_v.y, now_v.z);
         }
-        bool light_flag = false;
-        for (int a = 0; a < parsed_scene->objects[i].desc_args->len; a++) {
-            if (parsed_scene->objects[i].desc_args->args[a].type == 1) {
-                // The same value is copied over three times
-                // If multiple colour is needed, upgrade the type system in parser_api
-                float value = parsed_scene->objects[i].desc_args->args[a].lighting;
-                (*lighting)[i] = make_float3(value, value, value);
-                light_flag = true;
-            }
-        }
-        if (!light_flag && (*mesh)[i].materials[0] == LIGHT_SOURCE) {
-            fprintf(stderr, "[!] Lighting data is missing for light source: object %d\n", i);
-            exit(EXIT_FAILURE);
-        }
     }
     // print_scene(parsed_scene, 0);
     free_scene(parsed_scene);
@@ -163,16 +171,16 @@ static void parse_input(int *num_objects, PointsMesh **mesh, float3 **lighting) 
 static void init_device(void) {
     // Initialise test meshes
     int num_objects = 0;
-    float3* lightings = NULL;
     PointsMesh* meshes = NULL;
 #ifdef TEST
     initialise_test_scene_5(&num_objects, &meshes, &lightings);
 #else
-    parse_input(&num_objects, &meshes, &lightings);
+    parse_input(&num_objects, &meshes);
 #endif
     CUDA_CHECK(cudaGetLastError());
     // Initialise objects list
-    initialise_objects(num_objects, lightings, meshes);
+    int* light_source_objs;
+    initialise_objects(num_objects, meshes, &light_source_objs);
     CUDA_CHECK(cudaGetLastError());
     create_bvh();
     CUDA_CHECK(cudaGetLastError());
@@ -188,7 +196,7 @@ static void init_device(void) {
     initialise_material_texture(GREEN_DIFFUSE, "textures/green.png");
     CUDA_CHECK(cudaGetLastError());
     // Initialise light source data
-    initialise_light_sources(num_objects, lightings, meshes);
+    initialise_light_sources(num_objects, meshes, light_source_objs);
     CUDA_CHECK(cudaGetLastError());
 }
 
