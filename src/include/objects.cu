@@ -127,11 +127,11 @@ void initialise_objects(int num_objects, float3* lightings, PointsMesh* meshes) 
         CUDA_CHECK(cudaFree(vertices_devs[obj]));
         CUDA_CHECK(cudaFree(uv_devs[obj]));
     }
-    cudaFree(a_devs_dev);
-    cudaFree(b_devs_dev);
-    cudaFree(c_devs_dev);
-    cudaFree(vertices_devs_dev);
-    cudaFree(uv_devs_dev);
+    CUDA_CHECK(cudaFree(a_devs_dev));
+    CUDA_CHECK(cudaFree(b_devs_dev));
+    CUDA_CHECK(cudaFree(c_devs_dev));
+    CUDA_CHECK(cudaFree(vertices_devs_dev));
+    CUDA_CHECK(cudaFree(uv_devs_dev));
     free(a_devs);
     free(b_devs);
     free(c_devs);
