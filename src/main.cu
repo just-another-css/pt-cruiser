@@ -16,8 +16,6 @@ extern "C" {
 #include "math_utils.h"
 #include <time.h>
 
-#include "test_scene.h"
-
 #define API_ERROR(msg) {\
     fputs(msg, stderr);\
     glfwDestroyWindow(window);\
@@ -72,7 +70,6 @@ static void init_opengl(void) {
     postprocess_init(&fb, &ds, X_RES, Y_RES);
 }
 
-#ifndef TEST
 extern FILE *yyin;
 extern int yyerrors;
 extern Scene_t *parsed_scene;
@@ -166,17 +163,12 @@ static void parse_input(int *num_objects, PointsMesh **mesh) {
     // print_scene(parsed_scene, 0);
     free_scene(parsed_scene);
 }
-#endif
 
 static void init_device(void) {
     // Initialise test meshes
     int num_objects = 0;
     PointsMesh* meshes = NULL;
-#ifdef TEST
-    initialise_test_scene_5(&num_objects, &meshes, &lightings);
-#else
     parse_input(&num_objects, &meshes);
-#endif
     CUDA_CHECK(cudaGetLastError());
     // Initialise objects list
     int* light_source_objs;
@@ -258,7 +250,6 @@ static void clean_device(void) {
 }
 
 int main(int argc, char **argv) {
-#ifndef TEST
     if (argc < 2) {
         fputs("[!] SDL source file missing", stderr);
         fprintf(stderr, "Usage: %s <SDL source file> [<nvJPEG dest>]\n", argv[0]);
@@ -280,10 +271,6 @@ int main(int argc, char **argv) {
     puts("[+] Successfully parsed!");
     bool use_opengl = argc < 3;
     int jpeg_index = 2;
-#else
-    bool use_opengl = argc < 2;
-    int jpeg_index = 1;
-#endif
     if (use_opengl) {
         init_opengl();
     } else {

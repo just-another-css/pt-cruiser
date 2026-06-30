@@ -46,9 +46,6 @@ add_library(utils STATIC
     include/pathtracing.cu
     include/postprocess.cu
 )
-add_library(test STATIC
-    test_scene.cu
-)
 add_library(parser_lib STATIC IMPORTED GLOBAL)
 set_target_properties(parser_lib PROPERTIES IMPORTED_LOCATION ${PARSER_STATIC_LIB})
 set_source_files_properties(include/api_wrapper/thrust_wrapper.cu PROPERTIES
