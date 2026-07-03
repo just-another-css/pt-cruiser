@@ -9,6 +9,8 @@ typedef enum {
     TOK_CENTRE,
     TOK_COLOUR,
     TOK_MATERIAL,
+    TOK_TEXTURE,
+    TOK_MAT_NUM_ARG,
 
     // Numbers
     TOK_INT,
@@ -16,7 +18,9 @@ typedef enum {
 
     // Text
     TOK_STRING,
+    TOK_FILEPATH,
     TOK_IDENT, // Identifiers
+    TOK_FILENAME,
 
     // Punctuation characters
     TOK_LBRACE,

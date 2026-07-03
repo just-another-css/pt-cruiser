@@ -67,10 +67,57 @@ typedef struct {
     DescArgs* desc_args;
 } Obj_t;
 
+typedef enum {
+    TEXTURE,
+    TRANSPARENCY,
+    CRITANGLE,
+    REFRINDEX,
+    SMOOTHNESS,
+    ROUGHNESS,
+} MatArgType;
+
+typedef struct {
+    MatArgType type;
+    union {
+        float num_val;
+        char* filename;
+    };
+} MatArg;
+
+typedef struct {
+    char* texture_path;
+    float transparency;
+    float crit_angle;
+    float refr_index;
+    float smoothness;
+    float roughness;
+} MatArgs;
+
+typedef struct {
+    char* name;
+    MatArgs* args;
+} Mat_t;
+
+typedef enum {
+    OBJECT,
+    MATERIAL,
+} DefinitionType;
+
+typedef struct {
+    DefinitionType type;
+    union {
+        Obj_t obj;
+        Mat_t mat;
+    };
+} Definition_t;
+
 typedef struct {
     Obj_t* objects;
-    int capacity;
-    int len;
+    int obj_capacity;
+    int obj_len;
+    Mat_t* materials;
+    int mat_capacity;
+    int mat_len;
 } Scene_t;
 
 extern UV make_uv(float x, float y);
@@ -104,10 +151,19 @@ extern void free_vecs(VecList_t *vecs);
 extern Obj_t make_object(char *name, VecList_t *vecs, FaceList_t *faces, DescArgs *args);
 extern void free_object(Obj_t object);
 
-extern Scene_t* make_scene(Obj_t object);
-extern Scene_t* append_scene(Scene_t* scene, Obj_t object);
-extern void free_scene(Scene_t* scene);
+extern MatArg make_mat_texture(char* texture_path);
+extern MatArg make_mat_num_arg(char* arg, float num_val);
+extern MatArgs* make_mat_args(MatArg arg);
+extern MatArgs* append_mat_args(MatArgs* args, MatArg arg);
 
-extern void print_scene(Scene_t *scene, int tabs);
+extern Mat_t make_material_def(char* name, MatArgs* args);
+extern void free_material(Mat_t material);
+
+extern Definition_t union_obj(Obj_t obj);
+extern Definition_t union_mat(Mat_t mat);
+
+extern Scene_t* make_scene(Definition_t definition);
+extern Scene_t* append_scene(Scene_t* scene, Definition_t definition);
+extern void free_scene(Scene_t* scene);
 
 #endif

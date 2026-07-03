@@ -7,10 +7,7 @@
 #include "bvh.h"
 #include "light_sources.h"
 #include "objects.h"
-extern "C" {
-    #include "parser_api.h"
-    #include "parser.h"
-}
+#include "scene_processing.h"
 #include "pathtracing.h"
 #include "postprocess.h"
 #include "math_utils.h"
@@ -70,122 +67,12 @@ static void init_opengl(void) {
     postprocess_init(&fb, &ds, X_RES, Y_RES);
 }
 
-extern FILE *yyin;
-extern int yyerrors;
-extern Scene_t *parsed_scene;
-
-static void parse_input(int *num_objects, PointsMesh **mesh) {
-    *num_objects = parsed_scene->len;
-    *mesh = (PointsMesh*) malloc(parsed_scene->len * sizeof(PointsMesh));
-    MALLOC_CHECK(*mesh);
-    for (int i = 0; i < parsed_scene->len; i++) {
-        int num_triangles = parsed_scene->objects[i].faces->len;
-        int num_vertices = parsed_scene->objects[i].points->len;
-        (*mesh)[i].triangle_count = num_triangles;
-        (*mesh)[i].vertex_count = num_vertices;
-        (*mesh)[i].a = (int*) malloc(num_triangles * sizeof(int));
-        MALLOC_CHECK((*mesh)[i].a);
-        (*mesh)[i].b = (int*) malloc(num_triangles * sizeof(int));
-        MALLOC_CHECK((*mesh)[i].b);
-        (*mesh)[i].c = (int*) malloc(num_triangles * sizeof(int));
-        MALLOC_CHECK((*mesh)[i].c);
-        (*mesh)[i].vertices = (float3*) malloc(num_vertices * sizeof(float3));
-        MALLOC_CHECK((*mesh)[i].vertices);
-        (*mesh)[i].materials = (Material*) malloc(num_triangles * sizeof(Material));
-        MALLOC_CHECK((*mesh)[i].materials);
-        (*mesh)[i].lightings = (float3*) malloc(num_triangles * sizeof(float3));
-        MALLOC_CHECK((*mesh)[i].lightings);
-        (*mesh)[i].uv = (float2*) malloc(3 * num_triangles * sizeof(float2));
-        MALLOC_CHECK((*mesh)[i].uv);
-        bool default_lighting_set = false;
-        float3 default_lighting;
-        for (int a = 0; a < parsed_scene->objects[i].desc_args->len; a++) {
-            if (parsed_scene->objects[i].desc_args->args[a].type == 1) {
-                float value = parsed_scene->objects[i].desc_args->args[a].lighting;
-                default_lighting = make_float3(value, value, value);
-                default_lighting_set = true;
-            }
-        }
-        for (int tri = 0; tri < num_triangles; tri++) {
-            (*mesh)[i].a[tri] = parsed_scene->objects[i].faces->faces[tri].fst;
-            (*mesh)[i].b[tri] = parsed_scene->objects[i].faces->faces[tri].snd;
-            (*mesh)[i].c[tri] = parsed_scene->objects[i].faces->faces[tri].thr;
-            bool material_flag = false, lighting_flag = false, uv_flag = false;
-            float intensity;
-            for (int a = 0; a < parsed_scene->objects[i].faces->faces[tri].desc_args->len; a++) {
-                switch (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].type) {
-                    case 0: // material
-                        (*mesh)[i].materials[tri] = parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].material;
-                        material_flag = true;
-                        break;
-                    case 1: // lighting
-                        intensity = parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].lighting;
-                        (*mesh)[i].lightings[tri] = make_float3(intensity, intensity, intensity); // lighting is effectively a scalar applied to the colour of the object's texture
-                        lighting_flag = true;
-                        break;
-                    case 2: // uv
-                        if (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->len != 3) {
-                            fprintf(stderr, "[!] A face must have three uvs! Error on object %d face %d\n", i, tri);
-                            exit(EXIT_FAILURE);
-                        }
-                        (*mesh)[i].uv[tri * 3] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[0].x,
-                                                             parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[0].y);
-                        (*mesh)[i].uv[tri * 3 + 1] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].x,
-                                                                 parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].y);
-                        (*mesh)[i].uv[tri * 3 + 2] = make_float2(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].x,
-                                                                 parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].y);
-                        uv_flag = true;
-                        break;
-                    default:
-                        break;
-                }
-            }
-            if (!material_flag) {
-                fprintf(stderr, "[!] Material data is missing for object %d, face %d\n", i, tri);
-                exit(EXIT_FAILURE);
-            }
-            if (!lighting_flag) {
-                (*mesh)[i].lightings[tri] = default_lighting_set ? default_lighting : make_float3(0,0,0); // default to unlit or object lighting
-            }
-            if (!uv_flag) {
-                fprintf(stderr, "[!] UV data is missing for object %d, face %d\n", i, tri);
-                exit(EXIT_FAILURE);
-            }
-            if (tri && (*mesh)[i].materials[tri] != (*mesh)[i].materials[tri - 1]) {
-                printf("[!] Note: In object %d, face %d is using a different material than others in the object.\n", i, tri);
-            }
-        }
-        for (int v = 0; v < num_vertices; v++) {
-            Vec_t now_v = parsed_scene->objects[i].points->list[v];
-            (*mesh)[i].vertices[v] = make_float3(now_v.x, now_v.y, now_v.z);
-        }
-    }
-    // print_scene(parsed_scene, 0);
-    free_scene(parsed_scene);
-}
-
-static void init_device(void) {
-    // Initialise test meshes
-    int num_objects = 0;
-    PointsMesh* meshes = NULL;
-    parse_input(&num_objects, &meshes);
-    CUDA_CHECK(cudaGetLastError());
+static void init_device(int num_objects, PointsMesh* meshes) {
     // Initialise objects list
     int* light_source_objs;
     initialise_objects(num_objects, meshes, &light_source_objs);
     CUDA_CHECK(cudaGetLastError());
     create_bvh();
-    CUDA_CHECK(cudaGetLastError());
-    initialise_materials_data();
-    CUDA_CHECK(cudaGetLastError());
-    // Initialise test textures
-    initialise_material_texture(METAL, "textures/metal_texture.png");
-    initialise_material_texture(GLASS, "textures/diffuse_texture.png");
-    initialise_material_texture(LIGHT_SOURCE, "textures/light_source_texture.png");
-    initialise_material_texture(DIFFUSE, "textures/diffuse_texture2.png");
-    initialise_material_texture(LIGHT_DIFFUSE, "textures/diffuse_texture.png");
-    initialise_material_texture(RED_DIFFUSE, "textures/red.png");
-    initialise_material_texture(GREEN_DIFFUSE, "textures/green.png");
     CUDA_CHECK(cudaGetLastError());
     // Initialise light source data
     initialise_light_sources(num_objects, meshes, light_source_objs);
@@ -260,14 +147,11 @@ int main(int argc, char **argv) {
         fprintf(stderr, "[!] Error: Cannot open file %s\n", argv[1]);
         return EXIT_FAILURE;
     }
-    yyin = input_fp;
-    puts("[*] Starting parsing...");
-    int result = yyparse();
+    int num_objects;
+    PointsMesh* meshes;
+    parse_file(input_fp, &num_objects, &meshes);
     fclose(input_fp);
-    if (result || yyerrors) {
-        fprintf(stderr, "[!] Parsing failed with %d errors!\n", yyerrors);
-        return EXIT_FAILURE;
-    }
+    
     puts("[+] Successfully parsed!");
     bool use_opengl = argc < 3;
     int jpeg_index = 2;
@@ -279,10 +163,12 @@ int main(int argc, char **argv) {
         postprocess_jpeg_init(&fb, &js, 90);
     }
     
-    init_device();
+    init_device(num_objects, meshes);
+
     // float3 cam_pos = make_float3(-4000, 400, -1500), cam_up = make_float3(0,1,0), cam_dir = make_float3(1,0,0); // PT Cruiser scene
     float3 cam_pos = make_float3(0, 0, -3), cam_up = make_float3(0,1,0), cam_dir = make_float3(0,0,1); // Cornell box
     //float3 cam_pos = make_float3(0, 0, 0), cam_up = make_float3(0,1,0), cam_dir = make_float3(0,0,1); // Default
+    
     struct timespec prev, cur;
     timespec_get(&prev, TIME_UTC);
     if (use_opengl) {

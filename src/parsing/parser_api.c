@@ -230,35 +230,161 @@ void free_object(Obj_t object) {
     free(object.name);
 }
 
-Scene_t* make_scene(Obj_t object) {
+MatArg make_mat_texture(char* texture_path) {
+    return (MatArg) {
+        .type = TEXTURE,
+        .filename = texture_path
+    };
+}
+
+MatArg make_mat_num_arg(char* arg, float num_val) {
+    MatArg res = {
+        .num_val = num_val
+    };
+    switch (*arg) {
+        case 't':
+            res.type = arg[1] == 'e' ? TEXTURE : TRANSPARENCY;
+            break;
+        case 'c':
+            res.type = CRITANGLE;
+            break;
+        case 'r':
+            res.type = arg[1] == 'e' ? REFRINDEX : ROUGHNESS;
+            break;
+        case 's':
+            res.type = SMOOTHNESS;
+            break;
+    }
+    free(arg); // pointer arg is essentially discarded after this function
+    return res;
+}
+
+MatArgs* append_mat_args(MatArgs* args, MatArg arg);
+
+MatArgs* make_mat_args(MatArg arg) {
+    MatArgs* args = malloc(sizeof(MatArgs));
+    assert(args);
+    return append_mat_args(args, arg);
+}
+
+MatArgs* append_mat_args(MatArgs* args, MatArg arg) {
+    switch (arg.type) {
+        case TEXTURE:
+            args->texture_path = arg.filename;
+            break;
+        case TRANSPARENCY:
+            args->transparency = arg.num_val;
+            break;
+        case CRITANGLE:
+            args->crit_angle = arg.num_val;
+            break;
+        case REFRINDEX:
+            args->refr_index = arg.num_val;
+            break;
+        case SMOOTHNESS:
+            args->smoothness = arg.num_val;
+            break;
+        case ROUGHNESS:
+            args->roughness = arg.num_val;
+            break;
+    }
+    return args;
+}
+
+Mat_t make_material_def(char* name, MatArgs* args) {
+    return (Mat_t) {
+        .name = name,
+        .args = args
+    };
+}
+
+void free_material(Mat_t material) {
+    free(material.name);
+    free(material.args->texture_path);
+    free(material.args);
+}
+
+Definition_t union_obj(Obj_t obj) {
+    return (Definition_t) {
+        .type = OBJECT,
+        .obj = obj
+    };
+}
+
+Definition_t union_mat(Mat_t mat) {
+    return (Definition_t) {
+        .type = MATERIAL,
+        .mat = mat
+    };
+}
+
+static Scene_t* init_scene() {
     Scene_t* scene = malloc(sizeof(Scene_t));
     assert(scene != NULL); 
     scene->objects = malloc(LIST_INITIAL_CAPACITY * sizeof(Obj_t));
     assert(scene->objects != NULL);
-    scene->objects[0] = object;
-    scene->len = 1;
-    scene->capacity = LIST_INITIAL_CAPACITY;
+    scene->obj_len = 1;
+    scene->obj_capacity = LIST_INITIAL_CAPACITY;
     return scene;
 }
 
-static void resize_scene(Scene_t* scene) {
-    if (scene->len + 1 >= scene->capacity) {
-        scene->capacity <<= 1;
-        scene->objects = realloc(scene->objects, scene->capacity * sizeof(Obj_t));
+Scene_t* make_scene(Definition_t definition) {
+    Scene_t* scene = init_scene();
+    switch (definition.type) {
+        case OBJECT:
+            scene->objects[0] = definition.obj;
+            break;
+        case MATERIAL:
+            scene->materials[0] = definition.mat;
+            break;
+    }
+    return scene;
+}
+
+static void resize_scene_obj(Scene_t* scene) {
+    if (scene->obj_len + 1 >= scene->obj_capacity) {
+        scene->obj_capacity <<= 1;
+        scene->objects = realloc(scene->objects, scene->obj_capacity * sizeof(Obj_t));
         assert(scene->objects != NULL);
     }
 }
 
-Scene_t* append_scene(Scene_t* scene, Obj_t object) {
-    resize_scene(scene);
-    scene->objects[scene->len++] = object;
+static Scene_t* append_scene_obj(Scene_t* scene, Obj_t object) {
+    resize_scene_obj(scene);
+    scene->objects[scene->obj_len++] = object;
+    return scene;
+}
+
+static void resize_scene_mat(Scene_t* scene) {
+    if (scene->mat_len + 1 >= scene->mat_capacity) {
+        scene->mat_capacity <<= 1;
+        scene->materials = realloc(scene->materials, scene->obj_capacity * sizeof(Obj_t));
+        assert(scene->materials != NULL);
+    }
+}
+
+static Scene_t* append_scene_mat(Scene_t* scene, Mat_t material) {
+    resize_scene_mat(scene);
+    scene->materials[scene->mat_len++] = material;
+    return scene;
+}
+
+Scene_t* append_scene(Scene_t* scene, Definition_t definition) {
+    switch (definition.type) {
+        case OBJECT:
+            append_scene_obj(scene, definition.obj);
+            break;
+        case MATERIAL:
+            append_scene_mat(scene, definition.mat);
+            break;
+    }
     return scene;
 }
 
 void free_scene(Scene_t* scene) {
-    for (int i = 0; i < scene->len; i++) {
-        free_object(scene->objects[i]);
-    }
+    for (int i = 0; i < scene->obj_len; i++) free_object(scene->objects[i]);
+    for (int i = 0; i < scene->mat_len; i++) free_material(scene->materials[i]);
     free(scene->objects);
+    free(scene->materials);
     free(scene);
 }

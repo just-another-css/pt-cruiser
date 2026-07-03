@@ -3,17 +3,9 @@
 
 #include "constants.h"
 
-typedef enum {
-    LIGHT_SOURCE,
-    GLASS,
-    METAL,
-    DIFFUSE,
-    LIGHT_DIFFUSE,
-    RED_DIFFUSE,
-    GREEN_DIFFUSE,
-} Material;
+extern char* default_material_names[];
 
-#define NUM_MATERIALS 7
+#define NUM_DEFAULT_MATERIALS 5
 
 // Constants for light sources
 #define LIGHT_SOURCE_TRANSPARENCY 0
@@ -54,6 +46,8 @@ typedef struct {
 
 extern __constant__ MaterialData materials_data;
 
+extern void load_default_material(int material, char** texture_path, float* transparency, float* crit_angle, float* refr_index, float* smoothness, float* roughness);
+extern void initialise_materials_data(char** texture_paths, float* transparencies, float* crit_angles, float* refr_indices, float* smoothnesses, float* roughnesses, int num_materials);
 extern void initialise_material_texture(int material_i, char* texture_path);
 
 #endif

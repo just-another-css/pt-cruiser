@@ -45,6 +45,7 @@ add_library(utils STATIC
     include/materials.cu
     include/pathtracing.cu
     include/postprocess.cu
+    include/scene_processing.cu
 )
 add_library(parser_lib STATIC IMPORTED GLOBAL)
 set_target_properties(parser_lib PROPERTIES IMPORTED_LOCATION ${PARSER_STATIC_LIB})

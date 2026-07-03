@@ -39,6 +39,7 @@ int yywrap(void) {
     char *sval;
 
     Scene_t *sc;
+    Definition_t def;
     IntList *il;
     UV u;
     UVs *us;
@@ -49,17 +50,21 @@ int yywrap(void) {
     VecList_t *vl;
     Vec_t v;
     Obj_t o;
+    Mat_t m;
+    MatArgs *mas;
+    MatArg ma;
 }
 
 %token TOK_POINTS TOK_FACES TOK_CENTRE TOK_COLOUR TOK_MATERIAL TOK_LIGHTING TOK_UV
 %token <fval> TOK_FLOAT
 %token <ival> TOK_INT
-%token <sval> TOK_STRING
+%token <sval> TOK_STRING TOK_MAT_NUM_ARG TOK_TEXTURE TOK_FILEPATH
 %token <sval> TOK_IDENT
 %token TOK_LBRACE TOK_RBRACE TOK_LSQBRACKET TOK_RSQBRACKET TOK_LPAREN TOK_RPAREN TOK_EQUALS TOK_COMMA TOK_COLON TOK_NEWLINE
 %token TOK_ERROR
 
 %type <sc> scene
+%type <def> definition
 %type <il> ints int_list
 %type <das> desc_args
 %type <da> desc_arg
@@ -70,6 +75,9 @@ int yywrap(void) {
 %type <o> obj
 %type <us> uv_list uvs
 %type <u> uv
+%type <m> material
+%type <mas> mat_args
+%type <ma> mat_arg
 
 %start top
 
@@ -77,8 +85,12 @@ int yywrap(void) {
 top         : scene                                     { parsed_scene = $1; }
             ;
 
-scene       : scene TOK_NEWLINE obj                     { $$ = append_scene($1, $3); }
-            | obj                                       { $$ = make_scene($1); }
+scene       : scene TOK_NEWLINE definition              { $$ = append_scene($1, $3); }
+            | definition                                { $$ = make_scene($1); }
+            ;
+
+definition  : obj                                       { $$ = union_obj($1); }
+            | material                                  { $$ = union_mat($1); }
             ;
 
 obj         : TOK_IDENT TOK_EQUALS TOK_LBRACE
@@ -96,7 +108,7 @@ vecs        : vecs TOK_COMMA vec                        { $$ = append_vecs($1, $
 
 vec         : TOK_LPAREN TOK_FLOAT TOK_COMMA
               TOK_FLOAT TOK_COMMA
-              TOK_FLOAT TOK_RPAREN            { $$ = make_vec($2, $4, $6); }
+              TOK_FLOAT TOK_RPAREN                      { $$ = make_vec($2, $4, $6); }
             ;
 
 face_list   : TOK_LSQBRACKET faces TOK_RSQBRACKET       { $$ = $2; }
@@ -137,4 +149,15 @@ uvs         : uvs TOK_COMMA uv                          { $$ = append_uvs($1, $3
 
 uv          : TOK_LPAREN TOK_FLOAT TOK_COMMA
               TOK_FLOAT TOK_RPAREN                      { $$ = make_uv($2, $4); }
+            ;
+
+material    : TOK_STRING TOK_COLON TOK_LSQBRACKET mat_args TOK_RSQBRACKET { $$ = make_material_def($1, $4); }
+            ;
+
+mat_args    : mat_args TOK_COMMA mat_arg                { $$ = append_mat_args($1, $3); }
+            | mat_arg                                   { $$ = make_mat_args($1); }
+            ;
+
+mat_arg     : TOK_TEXTURE TOK_EQUALS TOK_FILEPATH       { $$ = make_mat_texture($3); }
+            | TOK_MAT_NUM_ARG TOK_EQUALS TOK_FLOAT      { $$ = make_mat_num_arg($1, $3); }
             ;

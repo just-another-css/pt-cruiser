@@ -24,8 +24,10 @@ DIGIT       [0-9]
 INT         {DIGIT}+
 FLOAT       -?{INT}\.{INT}
 ALPHA       [A-Za-z]
-OBJ_NAME    {ALPHA}+
-TEXT        [A-Za-z ]+
+NAME        {ALPHA}+
+TEXT        {ALPHA}([A-Za-z\-_ ])*
+CHARS       [A-Za-z0-9\-_~\ ]+
+FILEPATH    ({CHARS}"/")*{CHARS}"."{CHARS}
 WS          [ \t\r]+
 
 %%
@@ -38,6 +40,13 @@ WS          [ \t\r]+
 "lighting"          { return TOK_LIGHTING; }
 "uv"                { return TOK_UV; }
 
+"texture"           { yylval.sval = strdup(yytext); return TOK_TEXTURE; }
+"transparency"      |
+"crit_angle"        |
+"refr_index"        |
+"smoothness"        |
+"roughness"         { yylval.sval = strdup(yytext); return TOK_MAT_NUM_ARG; }
+
 {FLOAT}             {   
                         yylval.fval = atof(yytext);
                         return TOK_FLOAT;
@@ -48,7 +57,7 @@ WS          [ \t\r]+
                         return TOK_INT;
                     }
 
-\"({TEXT})\"        {   
+\"({TEXT})\"        {
                         int len = strlen(yytext) - 2; // -2 for quotes
                         yylval.sval = (char*) malloc(len + 1);
                         strncpy(yylval.sval, yytext + 1, len);
@@ -56,9 +65,17 @@ WS          [ \t\r]+
                         return TOK_STRING;
                     }
 
+\"({FILEPATH})\"    {
+                        int len = strlen(yytext) - 2; // -2 for quotes
+                        yylval.sval = (char*) malloc(len + 1);
+                        strncpy(yylval.sval, yytext + 1, len);
+                        yylval.sval[len] = '\0'; // Null terminator
+                        return TOK_FILEPATH;
+                    }
+
 "//"[^\n]*          { /* Ignore all comments */ }
 
-{OBJ_NAME}          {   
+{NAME}              {   
                         yylval.sval = strdup(yytext);
                         return TOK_IDENT;
                     }
