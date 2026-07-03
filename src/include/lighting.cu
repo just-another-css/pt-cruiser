@@ -23,7 +23,7 @@ __device__ __forceinline__ float calc_reflected_glass_intensity(float3 incident_
 * @param incoming_ray direction of incoming ray
 * @param surface_normal float4 
 */
-__device__ float calc_next_throughput(float3 incoming_ray, float4 surface_normal, float3 new_ray_dir, Material material) {
+__device__ float calc_next_throughput(float3 incoming_ray, float4 surface_normal, float3 new_ray_dir, int material) {
     float3 normal = f4_to_f3(surface_normal);
     // Calculate BRDF
     float3 perfect_reflection = sub_vec(incoming_ray, scale_vec(2 * vec_dot_prod(incoming_ray, normal), normal));
@@ -48,7 +48,7 @@ __device__ float calc_next_throughput(float3 incoming_ray, float4 surface_normal
     // Add tiny epsilon in case pdf is 0
     float epsilon = 0.001f;
 
-    if (material == GLASS) {
+    if (materials_data.transparencies[material]) {
         // if (vec_dot_prod(incoming_ray, normal) > 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
         float reflected_intensity = calc_reflected_glass_intensity(new_ray_dir, normal);
         // Check reflection or refraction
@@ -63,7 +63,7 @@ __device__ float calc_next_throughput(float3 incoming_ray, float4 surface_normal
 
 }
 
-__device__ float calc_next_throughput_nee(float3 incoming_ray, float4 surface_normal, float3 new_ray_dir, Material material) {
+__device__ float calc_next_throughput_nee(float3 incoming_ray, float4 surface_normal, float3 new_ray_dir, int material) {
     float3 normal = f4_to_f3(surface_normal);
     if (vec_dot_prod(incoming_ray, normal) > 0) scale_vec_ip(-1.0f, &normal);
     // Calculate BRDF

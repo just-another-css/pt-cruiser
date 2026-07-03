@@ -34,28 +34,10 @@ UVs* append_uvs(UVs *uvs, UV value) {
 }
 
 DescArg make_material(char *text) {
-    DescArg result;
-    result.type = 0;
-    if (strcmp(text, "light") == 0) {
-        result.material = LIGHT_SOURCE;
-    } else if (strcmp(text, "glass") == 0) {
-        result.material = GLASS;
-    } else if (strcmp(text, "metal") == 0) {
-        result.material = METAL;
-    } else if (strcmp(text, "diffuse") == 0) {
-        result.material = DIFFUSE;
-    } else if (strcmp(text, "lightdiffuse") == 0) {
-        result.material = LIGHT_DIFFUSE;
-    } else if (strcmp(text, "reddiffuse") == 0) {
-        result.material = RED_DIFFUSE;
-    } else if (strcmp(text, "greendiffuse") == 0) {
-        result.material = GREEN_DIFFUSE;
-    } else {
-        fprintf(stderr, "[!] Invalid Material Given: %s\n", text);
-        exit(EXIT_FAILURE);
-    }
-    free(text);
-    return result;
+    return (DescArg) {
+        .type = 0,
+        .material = text
+    };
 }
 
 DescArg make_lighting(float value) {

@@ -28,4 +28,4 @@ lex.yy.o: parser.h parser_api.h
 lexer_test.o: lexsupport.h
 lexsupport.o: lexsupport.h
 parser.o:	  parser.h parser_api.h
-parser_api.o: parser_api.h ../include/materials.h
+parser_api.o: parser_api.h

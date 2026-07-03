@@ -2,7 +2,6 @@
 #define PARSER_API_H
 
 #include <stdbool.h>
-#include "materials.h"
 
 typedef struct {
     float x;
@@ -18,7 +17,7 @@ typedef struct {
     // 0: material; 1; lighting; 2: uv
     int type;
     union {
-        Material material;
+        char* material;
         float lighting;
         UVs *uvs;
     };

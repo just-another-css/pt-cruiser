@@ -78,10 +78,10 @@ void initialise_objects(int num_objects, PointsMesh* meshes, int** light_source_
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].uv_ac, meshes[obj].triangle_count * sizeof(float2)));
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].aabbs.pt_min, meshes[obj].triangle_count * sizeof(float3)));
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].aabbs.pt_max, meshes[obj].triangle_count * sizeof(float3)));
-        CUDA_CHECK(cudaMalloc(&objects.meshes[obj].materials, meshes[obj].triangle_count * sizeof(Material)));
+        CUDA_CHECK(cudaMalloc(&objects.meshes[obj].materials, meshes[obj].triangle_count * sizeof(int)));
         CUDA_CHECK(cudaMalloc(&objects.meshes[obj].lightings, meshes[obj].triangle_count * sizeof(float3)));
         // Copy data to TriangleMesh
-        CUDA_CHECK(cudaMemcpy(objects.meshes[obj].materials, meshes[obj].materials, meshes[obj].triangle_count * sizeof(Material), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(objects.meshes[obj].materials, meshes[obj].materials, meshes[obj].triangle_count * sizeof(int), cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(objects.meshes[obj].lightings, meshes[obj].lightings, meshes[obj].triangle_count * sizeof(float3), cudaMemcpyHostToDevice));
         // Allocate space for data on device for processing
         CUDA_CHECK(cudaMalloc(&a_devs[obj], meshes[obj].triangle_count * sizeof(int)));

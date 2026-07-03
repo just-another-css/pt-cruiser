@@ -36,7 +36,7 @@ void initialise_materials_data(void) {
     cudaMemcpyToSymbol(materials_data, &materials_data_cpy, sizeof(MaterialData));
 }
 
-void initialise_material_texture(Material material, char* texture_path) {
+void initialise_material_texture(int material_i, char* texture_path) {
     // Load image to host array
     int x, y, n; // receive image data from stb
     float *texture_data = stbi_loadf(texture_path, &x, &y, &n, 4); // force 4 channels for CUDA texture object compatibility
@@ -56,8 +56,6 @@ void initialise_material_texture(Material material, char* texture_path) {
         .readMode = cudaReadModeElementType, // already loaded in as floats from stb
         .normalizedCoords = true, // UV coordinates will be normalised
     };
-    CUDA_CHECK(cudaCreateTextureObject(materials_textures + material, &resource_desc, &texture_desc, NULL));
-    CUDA_CHECK(cudaMemcpy(materials_data_cpy.textures + material, materials_textures + material, sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaCreateTextureObject(material_textures + material_i, &resource_desc, &texture_desc, NULL));
     stbi_image_free(texture_data);
 }

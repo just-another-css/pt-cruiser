@@ -160,10 +160,7 @@ __device__ static ray_collision find_first_collision(float3 ray_origin, float3 r
             }
         }
     }
-    //rct.rc.obj_i == GLASS ? rct.rc.pos = add_vec(ray_origin, scale_vec(rct.t + EPSILON, ray_dir)) : rct.rc.pos = add_vec(ray_origin, scale_vec(rct.t - EPSILON, ray_dir));
-    rct.rc.obj_i != -1 && objects_dev.meshes[rct.rc.obj_i].materials[rct.rc.face_i] == GLASS ? rct.rc.pos = add_vec(ray_origin, scale_vec(rct.t + EPSILON, ray_dir)) : rct.rc.pos = add_vec(ray_origin, scale_vec(rct.t - EPSILON, ray_dir));
-    // rct.rc.pos = add_vec(ray_origin, scale_vec(rct.t, ray_dir));
-    // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("finished ffc lesgoo!!!\n");
+    if (rct.rc.obj_i != -1) rct.rc.pos = add_vec(ray_origin, scale_vec(rct.t + (materials_data.transparencies[objects_dev.meshes[rct.rc.obj_i].materials[rct.rc.face_i]] ? EPSILON : -EPSILON), ray_dir));
     return rct.rc;
 }
 
@@ -206,7 +203,7 @@ __device__ static __forceinline__ float3 calc_rand_ray(int light_source_i, int o
     return sub_vec(point, ray_origin);
 }
 
-__device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision ray_int, float* ray_refr_ind, Material material, curandStatePhilox4_32_10_t* rand_state) {
+__device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision ray_int, float* ray_refr_ind, int material, curandStatePhilox4_32_10_t* rand_state) {
     // Check if transparent; if so, check random; if over threshold, refract based on material data
     float transparency = materials_data.transparencies[material];
     float3 normal = f4_to_f3(objects_dev.meshes[ray_int.obj_i].normals[ray_int.face_i]);
@@ -358,7 +355,7 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
         return;
     }
     TriangleMesh *ray_int_mesh = objects_dev.meshes + ray_int.obj_i;
-    Material material = ray_int_mesh->materials[ray_int.face_i];
+    int material = ray_int_mesh->materials[ray_int.face_i];
     // if (!x) printf("in step, the ray lived!!");
     float3 light_output = objects_dev.meshes[ray_int.obj_i].lightings[ray_int.face_i];
     // Calculate normalised UV coordinate for texture sampling

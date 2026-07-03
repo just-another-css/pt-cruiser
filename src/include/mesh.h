@@ -10,7 +10,7 @@ typedef struct {
     int *a, *b, *c;
     float3 *vertices;
     float2 *uv;
-    Material *materials;
+    int *materials;
     float3 *lightings;
 } PointsMesh;
 
@@ -21,7 +21,7 @@ typedef struct {
     float4 *normals;
     float2 *uv_a, *uv_ab, *uv_ac;
     BoundBoxes aabbs;
-    Material *materials;
+    int *materials;
     float3 *lightings;
 } TriangleMesh;
 

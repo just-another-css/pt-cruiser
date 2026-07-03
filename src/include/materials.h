@@ -54,8 +54,7 @@ typedef struct {
 
 extern __constant__ MaterialData materials_data;
 
-extern void initialise_materials_data(void);
-extern void initialise_material_texture(Material material, char* texture_path);
+extern void initialise_material_texture(int material_i, char* texture_path);
 
 #endif
 

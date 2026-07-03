@@ -1,6 +1,6 @@
 #include "mesh.h"
 
-// TriangleMesh* create_triangle_mesh(int* indices, int num_indices, float3* positions, int num_pos, float4* normals, float2* uv, Material* materials) {
+// TriangleMesh* create_triangle_mesh(int* indices, int num_indices, float3* positions, int num_pos, float4* normals, float2* uv, int* materials) {
 //     /* CPU allocation gibberish */
 //     TriangleMesh* mesh = (TriangleMesh*) malloc(sizeof(TriangleMesh));
 //     MALLOC_CHECK(mesh);
@@ -29,9 +29,9 @@
 //         memcpy(mesh->uv, uv, num_pos * sizeof(float2));
 //     }
 
-//     mesh->materials = (Material*) malloc(mesh->triangle_count * sizeof(Material));
+//     mesh->materials = (int*) malloc(mesh->triangle_count * sizeof(int));
 //     MALLOC_CHECK(mesh->materials);
-//     memcpy(mesh->materials, materials, mesh->triangle_count * sizeof(Material));
+//     memcpy(mesh->materials, materials, mesh->triangle_count * sizeof(int));
     
 //     return mesh;
     
