@@ -1,7 +1,7 @@
-lexer_test
-parser_test
 lex.yy.c
 parser.c
 parser.h
 parser.output
 !examples/*.txt
+*.o
+libparsing.a
