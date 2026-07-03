@@ -27,7 +27,7 @@ include_directories(${OPTIX_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/api_wrapper)
 
 add_custom_command(
-    OUTPUT ${PARSING_DIR}/parsing_test
+    OUTPUT ${PARSING_DIR}/libparsing.a
     COMMAND ${CMAKE_MAKE_PROGRAM} -C ${PARSING_DIR}
     COMMENT "Building the parser using its local Makefile"
     VERBATIM
@@ -62,7 +62,6 @@ target_link_libraries(utils PRIVATE
 #target_link_libraries(utils PRIVATE
 #    /vol/cuda/13.1.0/targets/x86_64-linux/lib/libnvjpeg.so
 #)
-set_target_properties(test PROPERTIES LANGUAGE CUDA)
 
 target_link_libraries(utils PRIVATE
     /usr/local/cuda/targets/x86_64-linux/lib/libnvjpeg.so
@@ -77,7 +76,10 @@ set_source_files_properties(main.cu PROPERTIES LANGUAGE CUDA)
 
 # Linking
 add_dependencies(parser_lib build_parser)
-add_custom_target(build_parser ALL DEPENDS ${PARSING_DIR}/parsing_test)
+add_custom_target(build_parser ALL DEPENDS ${PARSING_DIR}/libparsing.a)
+set_target_properties(build_parser PROPERTIES
+    IMPORTED_LOCATION ${PARSING_DIR}/libparsing.a
+)
 target_include_directories(renderer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${GLEW_INCLUDE_DIRS}
@@ -95,7 +97,6 @@ target_link_libraries(renderer PRIVATE
     parser_lib
     /usr/local/cuda/targets/x86_64-linux/lib/libnvjpeg.so
     #/vol/cuda/13.1.0/targets/x86_64-linux/lib/libnvjpeg.so
-    test
 )
 
 # Compiler Flags

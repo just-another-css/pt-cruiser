@@ -1,8 +1,8 @@
 CC      = gcc
 CFLAGS  = -g -Wall -I../include
 LDFLAGS = -g
-BUILD   = parser_test $(LIB)
-OBJS    = parser_api.o parser.o lex.yy.o parser_test.o
+BUILD   = $(LIB)
+OBJS    = parser_api.o parser.o lex.yy.o
 LFLAGS  = -l
 YFLAGS  = -vd
 ARFLAGS = rcs
@@ -16,12 +16,6 @@ clean:
 
 $(LIB): $(LIBOBJS)
 	$(AR) $(ARFLAGS) $(LIB) $(LIBOBJS)
-
-lexer_test: $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o lexer_test $(LDLIBS)
-
-parser_test: $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o parser_test
 
 lex.yy.c: lexer.l
 	flex $(LFLAGS) -o lex.yy.c lexer.l
