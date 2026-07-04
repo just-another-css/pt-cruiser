@@ -26,7 +26,7 @@ POSFLOAT    {INT}\.{INT}
 NEGFLOAT    -{INT}\.{INT}
 ALPHA       [A-Za-z]
 NAME        {ALPHA}+
-PARAM       -[A-Za-z_]+
+PARAM       -[a-z_]+
 TEXT        {ALPHA}([A-Za-z\-_ ])*
 CHARS       [A-Za-z0-9\-_~\ ]+
 FILEPATH    ({CHARS}"/")*{CHARS}"."{CHARS}
