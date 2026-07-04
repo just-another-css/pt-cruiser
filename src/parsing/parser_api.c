@@ -15,12 +15,13 @@ static void make_list(void** list, int* len, int* cap, int init_cap, size_t elem
     *len = 1;
 }
 
-static void resize_list(void** list, int len, int* cap, size_t elem_size) {
-    if (len + 1 >= *cap) {
+static inline void append_list(void** list, int* len, int* cap, void* elem, size_t elem_size) {
+    if (*len + 1 >= *cap) {
         *cap <<= 1;
         *list = realloc(*list, *cap * elem_size);
         assert(*list);
     }
+    memcpy((char*)(*list) + (*len)++ * elem_size, elem, elem_size);
 }
 
 UV make_uv(float x, float y) {
@@ -78,13 +79,8 @@ DescArgs* make_desc_args(DescArg head) {
     return args;
 }
 
-static void resize_desc_args(DescArgs *args) {
-    resize_list(&args->args, args->len, &args->capacity, sizeof(DescArg));
-}
-
 DescArgs* append_desc_args(DescArgs* args, DescArg value) {
-    resize_desc_args(args);
-    args->args[args->len++] = value;
+    append_list(&args->args, &args->len, &args->capacity, &value, sizeof(DescArg));
     return args;
 }
 
@@ -106,13 +102,8 @@ IntList* make_int_list(int head) {
     return list;
 }
 
-static void resize_int_list(IntList *list) {
-    resize_list(&list->list, list->len, &list->capacity, sizeof(int));
-}
-
 IntList* append_int_list(IntList *int_list, int value) {
-    resize_int_list(int_list);
-    int_list->list[int_list->len++] = value;
+    append_list(&int_list->list, &int_list->len, &int_list->capacity, &value, sizeof(int));
     return int_list;
 }
 
@@ -144,13 +135,8 @@ FaceList_t* make_face_list(Face_t face) {
     return list;
 }
 
-static void resize_face_list(FaceList_t *list) {
-    resize_list(&list->faces, list->len, &list->capacity, sizeof(Face_t));
-}
-
 FaceList_t* append_face_list(FaceList_t* facelist, Face_t face) {
-    resize_face_list(facelist);
-    facelist->faces[facelist->len++] = face;
+    append_list(&facelist->faces, &facelist->len, &facelist->capacity, &face, sizeof(Face_t));
     return facelist;
 }
 
@@ -179,13 +165,8 @@ VecList_t* make_vecs(Vec_t head) {
     return vecs;
 }
 
-static void resize_vecs(VecList_t *vecs) {
-    resize_list(&vecs->list, vecs->len, &vecs->capacity, sizeof(Vec_t));
-}
-
 VecList_t* append_vecs(VecList_t *vecs, Vec_t value) {
-    resize_vecs(vecs);
-    vecs->list[vecs->len++] = value;
+    append_list(&vecs->list, &vecs->len, &vecs->capacity, &value, sizeof(Vec_t));
     return vecs;
 }
 
@@ -314,31 +295,23 @@ Scene_t* make_scene(Definition_t definition) {
     switch (definition.type) {
         case OBJECT:
             scene->objects[0] = definition.obj;
+            scene->mat_len = 0; // RAL lengths defaulted to 1 in init_scene; reset the other list's length to zero since nothing inserted into it
             break;
         case MATERIAL:
             scene->materials[0] = definition.mat;
+            scene->obj_len = 0;
             break;
     }
     return scene;
 }
 
-static void resize_scene_obj(Scene_t* scene) {
-    resize_list(&scene->objects, scene->obj_len, &scene->obj_capacity, sizeof(Obj_t));
-}
-
 static Scene_t* append_scene_obj(Scene_t* scene, Obj_t object) {
-    resize_scene_obj(scene);
-    scene->objects[scene->obj_len++] = object;
+    append_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, &object, sizeof(Obj_t));
     return scene;
 }
 
-static void resize_scene_mat(Scene_t* scene) {
-    resize_list(&scene->materials, scene->mat_len, &scene->mat_capacity, sizeof(Mat_t));
-}
-
 static Scene_t* append_scene_mat(Scene_t* scene, Mat_t material) {
-    resize_scene_mat(scene);
-    scene->materials[scene->mat_len++] = material;
+    append_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, &material, sizeof(Mat_t));
     return scene;
 }
 
