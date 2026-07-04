@@ -11,3 +11,9 @@ shortbox = { points = [(0.565, -1.0, 0.784), (1.085, -1.0, 1.084), (0.835, -1.0,
 "reddiffuse": "light_diffuse" [ texture = "textures/red.png" ]
 "greendiffuse": "light_diffuse" [ texture = "textures/green.png" ]
 "light": "light_source" [ ]
+-x_res 3440
+-y_res 2160
+-x_fov 1.5
+-pixel_ray_grid_dim 10
+-pixels_per_tile 524288
+-ray_bounce_limit 20
