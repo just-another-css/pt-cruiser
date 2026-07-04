@@ -79,5 +79,6 @@ void initialise_material_texture(int material_i, char* texture_path) {
         .normalizedCoords = true, // UV coordinates will be normalised
     };
     CUDA_CHECK(cudaCreateTextureObject(material_textures + material_i, &resource_desc, &texture_desc, NULL));
+    CUDA_CHECK(cudaMemcpy(materials_data_cpy.textures + material_i, material_textures + material_i, sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice));
     stbi_image_free(texture_data);
 }
