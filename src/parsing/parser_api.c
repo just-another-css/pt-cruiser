@@ -8,6 +8,13 @@
 #define INT_LIST_INITIAL_CAPACITY 4
 #define LIST_INITIAL_CAPACITY 256
 
+static void make_list(void** list, int* len, int* cap, int init_cap, size_t elem_size) {
+    *list = malloc(init_cap * elem_size);
+    assert(*list);
+    *cap = init_cap;
+    *len = 1;
+}
+
 static void resize_list(void** list, int len, int* cap, size_t elem_size) {
     if (len + 1 >= *cap) {
         *cap <<= 1;
@@ -65,11 +72,8 @@ DescArg make_uvdata(UVs *uvs) {
 
 DescArgs* make_desc_args(DescArg head) {
     DescArgs* args = malloc(sizeof(DescArgs));
-    assert (args);
-    args->args = malloc(DESC_ARGS_INITIAL_CAPACITY * sizeof(DescArg));
-    assert (args->args);
-    args->capacity = DESC_ARGS_INITIAL_CAPACITY;
-    args->len = 1;
+    assert(args);
+    make_list(&args->args, &args->len, &args->capacity, DESC_ARGS_INITIAL_CAPACITY, sizeof(DescArg));
     args->args[0] = head;
     return args;
 }
@@ -100,11 +104,8 @@ void free_desc_args(DescArgs* args) {
 
 IntList* make_int_list(int head) {
     IntList *list = malloc(sizeof(IntList));
-    assert (list);
-    list->list = malloc(INT_LIST_INITIAL_CAPACITY * sizeof(int));
-    assert (list->list);
-    list->capacity = INT_LIST_INITIAL_CAPACITY;
-    list->len = 1;
+    assert(list);
+    make_list(&list->list, &list->len, &list->capacity, INT_LIST_INITIAL_CAPACITY, sizeof(int));
     list->list[0] = head;
     return list;
 }
@@ -141,12 +142,9 @@ Face_t make_face(IntList *list, DescArgs *args) {
 
 FaceList_t* make_face_list(Face_t face) {
     FaceList_t* list = malloc(sizeof(FaceList_t));
-    assert(list != NULL);
-    list->faces = malloc(LIST_INITIAL_CAPACITY * sizeof(Face_t));
-    assert(list->faces != NULL);
-    list->capacity = LIST_INITIAL_CAPACITY;
+    assert(list);
+    make_list(&list->faces, &list->len, &list->capacity, LIST_INITIAL_CAPACITY, sizeof(Face_t));
     list->faces[0] = face;
-    list->len = 1;
     return list;
 }
 
@@ -179,11 +177,8 @@ Vec_t make_vec(float x, float y, float z) {
 
 VecList_t* make_vecs(Vec_t head) {
     VecList_t *vecs = malloc(sizeof(VecList_t));
-    assert (vecs);
-    vecs->list = malloc(LIST_INITIAL_CAPACITY * sizeof(Vec_t));
-    assert (vecs->list);
-    vecs->capacity = LIST_INITIAL_CAPACITY;
-    vecs->len = 1;
+    assert(vecs);
+    make_list(&vecs->list, &vecs->len, &vecs->capacity, LIST_INITIAL_CAPACITY, sizeof(Vec_t));
     vecs->list[0] = head;
     return vecs;
 }
@@ -312,11 +307,9 @@ Definition_t union_mat(Mat_t mat) {
 
 static Scene_t* init_scene() {
     Scene_t* scene = malloc(sizeof(Scene_t));
-    assert(scene != NULL); 
-    scene->objects = malloc(LIST_INITIAL_CAPACITY * sizeof(Obj_t));
-    assert(scene->objects != NULL);
-    scene->obj_len = 1;
-    scene->obj_capacity = LIST_INITIAL_CAPACITY;
+    assert(scene);
+    make_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, LIST_INITIAL_CAPACITY, sizeof(Obj_t));
+    make_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, LIST_INITIAL_CAPACITY, sizeof(Mat_t));
     return scene;
 }
 
