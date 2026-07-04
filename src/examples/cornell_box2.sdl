@@ -9,5 +9,5 @@ shortbox = { points = [(0.565, -1.0, 0.784), (1.085, -1.0, 1.084), (0.835, -1.0,
 "lightdiffuse": [ texture = "textures/diffuse_texture.png", transparency = 0.0, crit_angle = 0.0, refr_index = 0.0, smoothness = 0.0, roughness = 0.0 ]
 "diffuse": [ texture = "textures/diffuse_texture2.png", transparency = 0.0, crit_angle = 0.0, refr_index = 0.0, smoothness = 0.0, roughness = 0.0 ]
 "reddiffuse": [ texture = "textures/red.png", transparency = 0.0, crit_angle = 0.0, refr_index = 0.0, smoothness = 0.0, roughness = 0.0 ]
-"greendiffuse": [ texture = "textures/red.png", transparency = 0.0, crit_angle = 0.0, refr_index = 0.0, smoothness = 0.0, roughness = 0.0 ]
+"greendiffuse": [ texture = "textures/green.png", transparency = 0.0, crit_angle = 0.0, refr_index = 0.0, smoothness = 0.0, roughness = 0.0 ]
 "light": [ texture = "textures/light_source_texture.png", transparency = 0.0, crit_angle = 0.0, refr_index = 0.0, smoothness = 0.0, roughness = 0.0 ]
