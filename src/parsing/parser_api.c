@@ -121,14 +121,14 @@ void free_int_list(IntList *list) {
 
 Face_t make_face(IntList *list, DescArgs *args) {
     if (list->len != 3) {
-        fprintf(stderr, "[!] A triangular face should only have 3 vertices, %d is given", list->len);
+        fprintf(stderr, "[!] All faces must have 3 vertices; %d were provided", list->len);
         exit(EXIT_FAILURE);
     }
     Face_t face = {
         .fst = list->list[0],
         .snd = list->list[1],
         .thr = list->list[2],
-        .desc_args = args
+        .desc_args = args ? args : make_empty_desc_args()
     };
     free_int_list(list);
     return face;

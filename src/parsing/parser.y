@@ -121,6 +121,7 @@ faces       : faces TOK_COMMA face                      { $$ = append_face_list(
 
 face        : TOK_LBRACE TOK_POINTS TOK_EQUALS
               int_list desc_args TOK_RBRACE             { $$ = make_face($4, $5); }
+            | int_list                                  { $$ = make_face($1, NULL); }
             ;
 
 int_list    : TOK_LSQBRACKET ints TOK_RSQBRACKET        { $$ = $2; }
