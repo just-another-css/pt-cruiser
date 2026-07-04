@@ -13,3 +13,7 @@ parsing/lexer_test
 # Include example test files
 !examples/*.txt
 web-ui/subprocess
+
+# Exclude nvJPEG output
+*.jpeg
+*.jpg
