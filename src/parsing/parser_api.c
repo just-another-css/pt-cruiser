@@ -284,6 +284,25 @@ void free_material(Mat_t material) {
     }
 }
 
+Param_t make_float_param(char* name, float value) {
+    return (Param_t) {
+        .name = name,
+        .fval = value
+    };
+}
+
+Param_t make_int_param(char* name, int value) {
+    return (Param_t) {
+        .name = name,
+        .ival = value
+    };
+}
+
+void free_param(Param_t param) {
+    free(param.name);
+}
+
+
 Definition_t union_obj(Obj_t obj) {
     return (Definition_t) {
         .type = OBJECT,
@@ -298,11 +317,19 @@ Definition_t union_mat(Mat_t mat) {
     };
 }
 
+Definition_t union_param(Param_t param) {
+    return (Definition_t) {
+        .type = PARAM,
+        .param = param
+    };
+}
+
 static Scene_t* init_scene() {
     Scene_t* scene = malloc(sizeof(Scene_t));
     assert(scene);
     make_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, LIST_INITIAL_CAPACITY, sizeof(Obj_t));
     make_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, LIST_INITIAL_CAPACITY, sizeof(Mat_t));
+    make_list(&scene->params, &scene->param_len, &scene->param_capacity, LIST_INITIAL_CAPACITY, sizeof(Param_t));
     return scene;
 }
 
@@ -312,32 +339,32 @@ Scene_t* make_scene(Definition_t definition) {
         case OBJECT:
             scene->objects[0] = definition.obj;
             scene->mat_len = 0; // RAL lengths defaulted to 1 in init_scene; reset the other list's length to zero since nothing inserted into it
+            scene->param_len = 0;
             break;
         case MATERIAL:
             scene->materials[0] = definition.mat;
             scene->obj_len = 0;
+            scene->param_len = 0;
+            break;
+        case PARAM:
+            scene->params[0] = definition.param;
+            scene->obj_len = 0;
+            scene->mat_len = 0;
             break;
     }
-    return scene;
-}
-
-static Scene_t* append_scene_obj(Scene_t* scene, Obj_t object) {
-    append_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, &object, sizeof(Obj_t));
-    return scene;
-}
-
-static Scene_t* append_scene_mat(Scene_t* scene, Mat_t material) {
-    append_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, &material, sizeof(Mat_t));
     return scene;
 }
 
 Scene_t* append_scene(Scene_t* scene, Definition_t definition) {
     switch (definition.type) {
         case OBJECT:
-            append_scene_obj(scene, definition.obj);
+            append_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, &definition.obj, sizeof(Obj_t));
             break;
         case MATERIAL:
-            append_scene_mat(scene, definition.mat);
+            append_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, &definition.mat, sizeof(Mat_t));
+            break;
+        case PARAM:
+            append_list(&scene->params, &scene->param_len, &scene->param_capacity, &definition.param, sizeof(Param_t));
             break;
     }
     return scene;
@@ -346,7 +373,9 @@ Scene_t* append_scene(Scene_t* scene, Definition_t definition) {
 void free_scene(Scene_t* scene) {
     for (int i = 0; i < scene->obj_len; i++) free_object(scene->objects[i]);
     for (int i = 0; i < scene->mat_len; i++) free_material(scene->materials[i]);
+    for (int i = 0; i < scene->param_len; i++) free_param(scene->params[i]);
     free(scene->objects);
     free(scene->materials);
+    free(scene->params);
     free(scene);
 }

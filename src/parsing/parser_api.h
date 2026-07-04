@@ -103,9 +103,18 @@ typedef struct {
     MatArgs* args;
 } Mat_t;
 
+typedef struct {
+    char* name;
+    union {
+        float fval;
+        int ival;
+    };
+} Param_t;
+
 typedef enum {
     OBJECT,
     MATERIAL,
+    PARAM,
 } DefinitionType;
 
 typedef struct {
@@ -113,6 +122,7 @@ typedef struct {
     union {
         Obj_t obj;
         Mat_t mat;
+        Param_t param;
     };
 } Definition_t;
 
@@ -123,6 +133,9 @@ typedef struct {
     Mat_t* materials;
     int mat_capacity;
     int mat_len;
+    Param_t* params;
+    int param_capacity;
+    int param_len;
 } Scene_t;
 
 extern UV make_uv(float x, float y);
@@ -165,8 +178,13 @@ extern MatArgs* append_mat_args(MatArgs* args, MatArg arg);
 extern Mat_t make_material_def(char* name, char* base_mat, MatArgs* args);
 extern void free_material(Mat_t material);
 
+extern Param_t make_float_param(char* name, float value);
+extern Param_t make_int_param(char* name, int value);
+extern void free_param(Param_t param);
+
 extern Definition_t union_obj(Obj_t obj);
 extern Definition_t union_mat(Mat_t mat);
+extern Definition_t union_param(Param_t param);
 
 extern Scene_t* make_scene(Definition_t definition);
 extern Scene_t* append_scene(Scene_t* scene, Definition_t definition);

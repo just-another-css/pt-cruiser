@@ -53,13 +53,13 @@ int yywrap(void) {
     Mat_t m;
     MatArgs *mas;
     MatArg ma;
+    Param_t p;
 }
 
 %token TOK_POINTS TOK_FACES TOK_CENTRE TOK_COLOUR TOK_MATERIAL TOK_LIGHTING TOK_UV
 %token <fval> TOK_POSFLOAT TOK_NEGFLOAT
 %token <ival> TOK_INT
-%token <sval> TOK_STRING TOK_MAT_NUM_ARG TOK_TEXTURE TOK_FILEPATH
-%token <sval> TOK_IDENT
+%token <sval> TOK_STRING TOK_MAT_NUM_ARG TOK_TEXTURE TOK_FILEPATH TOK_IDENT TOK_PARAM
 %token TOK_LBRACE TOK_RBRACE TOK_LSQBRACKET TOK_RSQBRACKET TOK_LPAREN TOK_RPAREN TOK_EQUALS TOK_COMMA TOK_COLON TOK_NEWLINE
 %token TOK_ERROR
 
@@ -78,6 +78,7 @@ int yywrap(void) {
 %type <m> material
 %type <mas> mat_args
 %type <ma> mat_arg
+%type <p> parameter
 %type <fval> float
 
 %start top
@@ -92,6 +93,7 @@ scene       : scene TOK_NEWLINE definition              { $$ = append_scene($1, 
 
 definition  : obj                                       { $$ = union_obj($1); }
             | material                                  { $$ = union_mat($1); }
+            | parameter                                 { $$ = union_param($1); }
             ;
 
 obj         : TOK_IDENT TOK_EQUALS TOK_LBRACE
@@ -169,6 +171,9 @@ mat_args    : mat_args TOK_COMMA mat_arg                { $$ = append_mat_args($
 mat_arg     : TOK_TEXTURE TOK_EQUALS TOK_FILEPATH       { $$ = make_mat_texture($3); }
             | TOK_MAT_NUM_ARG TOK_EQUALS TOK_POSFLOAT   { $$ = make_mat_num_arg($1, $3); }
             ;
+
+parameter   : TOK_PARAM float                           { $$ = make_float_param($1, $2); }
+            | TOK_PARAM TOK_INT                         { $$ = make_int_param($1, $2); }
 
 float       : TOK_POSFLOAT
             | TOK_NEGFLOAT

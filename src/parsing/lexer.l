@@ -26,6 +26,7 @@ POSFLOAT    {INT}\.{INT}
 NEGFLOAT    -{INT}\.{INT}
 ALPHA       [A-Za-z]
 NAME        {ALPHA}+
+PARAM       -[A-Za-z_]+
 TEXT        {ALPHA}([A-Za-z\-_ ])*
 CHARS       [A-Za-z0-9\-_~\ ]+
 FILEPATH    ({CHARS}"/")*{CHARS}"."{CHARS}
@@ -62,6 +63,8 @@ WS          [ \t\r]+
                         yylval.fval = atof(yytext);
                         return TOK_NEGFLOAT;
                     }
+
+{PARAM}             { yylval.sval = strdup(yytext + 1); return TOK_PARAM; }
 
 \"({TEXT})\"        {
                         int len = strlen(yytext) - 2; // -2 for quotes

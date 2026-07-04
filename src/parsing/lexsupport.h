@@ -22,6 +22,7 @@ typedef enum {
     TOK_FILEPATH,
     TOK_IDENT, // Identifiers
     TOK_FILENAME,
+    TOK_PARAM,
 
     // Punctuation characters
     TOK_LBRACE,
