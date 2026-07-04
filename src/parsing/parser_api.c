@@ -287,14 +287,14 @@ void free_material(Mat_t material) {
 Param_t make_float_param(char* name, float value) {
     return (Param_t) {
         .name = name,
-        .fval = value
+        .value = value
     };
 }
 
 Param_t make_int_param(char* name, int value) {
     return (Param_t) {
         .name = name,
-        .ival = value
+        .value = value
     };
 }
 

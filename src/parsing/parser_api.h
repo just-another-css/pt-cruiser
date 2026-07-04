@@ -105,10 +105,7 @@ typedef struct {
 
 typedef struct {
     char* name;
-    union {
-        float fval;
-        int ival;
-    };
+    float value;
 } Param_t;
 
 typedef enum {
