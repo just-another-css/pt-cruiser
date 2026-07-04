@@ -126,7 +126,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
             if (!material_flag) {
                 if (default_material_set) (*mesh)[i].materials[tri] = default_material;
                 else {
-                    fprintf(stderr, "[!] Material data is missing for object %d, face %d\n", i, tri);
+                    fprintf(stderr, "[!] No material was provided for face %d of object %d, and no material was provided for the object\n", tri, i);
                     exit(EXIT_FAILURE);
                 }
             }
