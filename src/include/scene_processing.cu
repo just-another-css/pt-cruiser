@@ -48,32 +48,32 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
         MALLOC_CHECK((*mesh)[i].lightings);
         (*mesh)[i].uv = (float2*) malloc(3 * num_triangles * sizeof(float2));
         MALLOC_CHECK((*mesh)[i].uv);
-        bool default_material_set = false, default_lighting_set = false;
-        int default_material;
-        float3 default_lighting;
+        bool object_material_set = false, object_lighting_set = false;
+        int object_material;
+        float3 object_lighting;
         float value;
         for (int a = 0; a < parsed_scene->objects[i].desc_args->len; a++) {
             switch (parsed_scene->objects[i].desc_args->args[a].type) {
                 case 0: // material
-                    default_material = find_material(parsed_scene->objects[i].desc_args->args[a].material, material_names, parsed_scene->mat_len);
-                    if (default_material == INVALID_MATERIAL) {
-                        default_material = find_material(parsed_scene->objects[i].desc_args->args[a].material, default_material_names, NUM_DEFAULT_MATERIALS);
-                        if (default_material == INVALID_MATERIAL) {
+                    object_material = find_material(parsed_scene->objects[i].desc_args->args[a].material, material_names, parsed_scene->mat_len);
+                    if (object_material == INVALID_MATERIAL) {
+                        object_material = find_material(parsed_scene->objects[i].desc_args->args[a].material, default_material_names, NUM_DEFAULT_MATERIALS);
+                        if (object_material == INVALID_MATERIAL) {
                             fprintf(stderr, "[!] Unidentified material '%s' used in object %d", parsed_scene->objects[i].desc_args->args[a].material, i);
                             exit(EXIT_FAILURE);
                         }
-                        if (!use_default_materials[default_material]) {
-                            use_default_materials[default_material] = true;
-                            default_material_is[default_material] = num_total_materials++;
+                        if (!use_default_materials[object_material]) {
+                            use_default_materials[object_material] = true;
+                            default_material_is[object_material] = num_total_materials++;
                         }
-                        default_material = default_material_is[default_material];
+                        object_material = default_material_is[object_material];
                     }
-                    default_material_set = true;
+                    object_material_set = true;
                     break;
                 case 1: // lighting
                     value = parsed_scene->objects[i].desc_args->args[a].lighting;
-                    default_lighting = make_float3(value, value, value);
-                    default_lighting_set = true;
+                    object_lighting = make_float3(value, value, value);
+                    object_lighting_set = true;
                     break;
             }
         }
@@ -124,14 +124,14 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                 }
             }
             if (!material_flag) {
-                if (default_material_set) (*mesh)[i].materials[tri] = default_material;
+                if (object_material_set) (*mesh)[i].materials[tri] = object_material;
                 else {
                     fprintf(stderr, "[!] No material was provided for face %d of object %d, and no material was provided for the object\n", tri, i);
                     exit(EXIT_FAILURE);
                 }
             }
             if (!lighting_flag) {
-                (*mesh)[i].lightings[tri] = default_lighting_set ? default_lighting : make_float3(0,0,0); // default to unlit or object lighting
+                (*mesh)[i].lightings[tri] = object_lighting_set ? object_lighting : make_float3(0,0,0); // default to unlit or object lighting
             }
             if (!uv_flag) {
                 (*mesh)[i].uv[tri * 3] = make_float2(0, 0);
