@@ -1,0 +1,13 @@
+floor = { points = [(-2.0, -1.0, -1.0), (2.0, -1.0, -1.0), (2.0, -1.0, 3.0), (-2.0, -1.0, 3.0)], faces = [{ points = [0, 1, 2] }, { points = [0, 2, 3] }], material = "lightdiffuse" }
+ceiling = { points = [(-2.0, 1.0, -1.0), (2.0, 1.0, -1.0), (2.0, 1.0, 3.0), (-2.0, 1.0, 3.0)], faces = [{ points = [0, 2, 1] }, { points = [0, 3, 2] }], material = "diffuse" }
+backwall = { points = [(-2.0, -1.0, 3.0), (2.0, -1.0, 3.0), (2.0, 1.0, 3.0), (-2.0, 1.0, 3.0)], faces = [{ points = [0, 2, 1] }, { points = [0, 3, 2] }], material = "lightdiffuse" }
+leftwall = { points = [(-2.0, -1.0, -1.0), (-2.0, -1.0, 3.0), (-2.0, 1.0, 3.0), (-2.0, 1.0, -1.0)], faces = [{ points = [0, 1, 2] }, { points = [0, 2, 3] }], material = "reddiffuse" }
+rightwall = { points = [(2.0, -1.0, -1.0), (2.0, -1.0, 3.0), (2.0, 1.0, 3.0), (2.0, 1.0, -1.0)], faces = [{ points = [0, 2, 1], lighting = 0.5 }, { points = [0, 3, 2] }], material = "greendiffuse" }
+light = { points = [(-0.3, 0.999, 0.2), (0.3, 0.999, 0.2), (0.3, 0.999, 0.8), (-0.3, 0.999, 0.8)], faces = [{ points = [0, 2, 1] }, { points = [0, 3, 2] }], material = "light", lighting = 2.5 }
+tallbox = { points = [(-1.010, -1.0, 0.490), (-0.490, -1.0, 0.790), (-0.790, -1.0, 1.310), (-1.310, -1.0, 1.010), (-1.010, 0.2, 0.490), (-0.490, 0.2, 0.790), (-0.790, 0.2, 1.310), (-1.310, 0.2, 1.010)], faces = [{ points = [0, 1, 2] }, { points = [0, 2, 3] }, { points = [4, 6, 5] }, { points = [4, 7, 6] }, { points = [0, 5, 1] }, { points = [0, 4, 5] }, { points = [1, 6, 2] }, { points = [1, 5, 6] }, { points = [2, 7, 3] }, { points = [2, 6, 7] }, { points = [3, 4, 0] }, { points = [3, 7, 4] }], material = "metal" }
+shortbox = { points = [(0.565, -1.0, 0.784), (1.085, -1.0, 1.084), (0.835, -1.0, 1.517), (0.315, -1.0, 1.217), (0.565, -0.4, 0.784), (1.085, -0.4, 1.084), (0.835, -0.4, 1.517), (0.315, -0.4, 1.217)], faces = [{ points = [0, 2, 1] }, { points = [0, 3, 2] }, { points = [4, 5, 6] }, { points = [4, 6, 7] }, { points = [0, 1, 5] }, { points = [0, 5, 4] }, { points = [1, 2, 6] }, { points = [1, 6, 5] }, { points = [2, 3, 7] }, { points = [2, 7, 6] }, { points = [3, 0, 4] }, { points = [3, 4, 7] }], material = "lightdiffuse" }
+"lightdiffuse": "light_diffuse" [ ]
+"diffuse": "dark_diffuse" [ ]
+"reddiffuse": "light_diffuse" [ texture = "textures/red.png" ]
+"greendiffuse": "light_diffuse" [ texture = "textures/green.png" ]
+"light": "light_source" [ ]
