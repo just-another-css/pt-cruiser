@@ -8,6 +8,7 @@
 #include "objects.h"
 #include "light_sources.h"
 #include "lighting.h"
+#include "constants.h"
 
 typedef struct {
     float3 pos;
@@ -20,43 +21,44 @@ typedef struct {
     float t;
 } ray_collision_t;
 
-__global__ static void initialise_rand_states(int rand_seed, curandStatePhilox4_32_10_t* rand_states) {
+__global__ static void initialise_rand_states(int rand_seed, int rays_per_tile, curandStatePhilox4_32_10_t* rand_states) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    if (x >= TILE_RAYS) return;
+    if (x >= rays_per_tile) return;
     curand_init(rand_seed, x, 0, rand_states + x);
 }
 
 // Calculate rays for each pixel with jitter; one thread per pixel
-__global__ static void calc_pixel_rays(int tile, int cur_tile_pixels, float3 cam_dir, float3 view_x_dir, float3 view_y_dir, float3* top_left_corners, float3* left_rights, float3* top_bottoms) {
+__global__ static void calc_pixel_rays(int tile, int cur_tile_pixels, int pixels_per_tile, int total_pixels, int half_x_res, int half_y_res, int x_res, int pixel_ray_grid_dim,
+                                       float3 cam_dir, float3 view_x_dir, float3 view_y_dir, float3* top_left_corners, float3* left_rights, float3* top_bottoms) {
     // Find thread position in grid; corresponds to pixel position
     int i = blockIdx.x * blockDim.x + threadIdx.x; // x is the faster dimension in CUDA
     if (i >= cur_tile_pixels) return;
-    int pixel_i = i + tile * TILE_PIXELS;
-    if (pixel_i >= TOTAL_PIXELS) return;
-    int y = pixel_i / X_RES, x = pixel_i - y * X_RES; // calculate x and y within tile
+    int pixel_i = i + tile * pixels_per_tile;
+    if (pixel_i >= total_pixels) return;
+    int y = pixel_i / x_res, x = pixel_i - y * x_res; // calculate x and y within tile
     // Calculate pixel top left corner
-    float x_frac = fdividef(x, X_RES_HALF) - 1, // x and y position in normalised [-1,1] range
-        y_frac = fdividef(y, Y_RES_HALF) - 1;
+    float x_frac = fdividef(x, half_x_res) - 1, // x and y position in normalised [-1,1] range
+        y_frac = fdividef(y, half_y_res) - 1;
     float3 top_left = add_vec(scale_vec(x_frac, view_x_dir), scale_vec(y_frac, view_y_dir)); // top left of pixel
     // Calculate vectors for pixel edges (consider using adjacent threads to calculate?)
-    float right_x_frac = fdividef(x + 1, X_RES_HALF) - 1, // right side of pixel in range [-1,1]
-        bottom_y_frac = fdividef(y + 1, Y_RES_HALF) - 1; // bottom side of pixel in range [-1,1]
+    float right_x_frac = fdividef(x + 1, half_x_res) - 1, // right side of pixel in range [-1,1]
+        bottom_y_frac = fdividef(y + 1, half_y_res) - 1; // bottom side of pixel in range [-1,1]
     float3 top_right = add_vec(scale_vec(right_x_frac, view_x_dir), scale_vec(y_frac, view_y_dir)); // top right of pixel
     float3 bottom_left = add_vec(scale_vec(x_frac, view_x_dir), scale_vec(bottom_y_frac, view_y_dir)); // bottom left of pixel
-    float grid_scalar = __frcp_rd(PIXEL_RAY_GRID_DIM); // divide vectors along whole edges of pixels to scale to sample grid cells
+    float grid_scalar = __frcp_rd(pixel_ray_grid_dim); // divide vectors along whole edges of pixels to scale to sample grid cells
     left_rights[i] = scale_vec(grid_scalar, sub_vec(top_right, top_left)); // vector from left to right edges of pixel grid cell
     top_bottoms[i] = scale_vec(grid_scalar, sub_vec(bottom_left, top_left)); // vector from top to bottom edges of pixel grid cell
     add_vec_ip(&top_left, cam_dir); // add camera offset to top left vector
     top_left_corners[i] = top_left;
 }
 
-__global__ static void calc_pixel_samples(int cur_tile_pixels, float3* top_left_corners, float3* left_rights, float3* top_bottoms, float3* ray_dirs, curandStatePhilox4_32_10_t* rand_states) {
+__global__ static void calc_pixel_samples(int cur_tile_pixels, int rays_per_pixel, int pixel_ray_grid_dim, float3* top_left_corners, float3* left_rights, float3* top_bottoms, float3* ray_dirs, curandStatePhilox4_32_10_t* rand_states) {
     int pixel_i = blockIdx.y * blockDim.y + threadIdx.y;
     int sample = blockIdx.x * blockDim.x + threadIdx.x; // x is the faster dimension in CUDA
-    if (pixel_i >= cur_tile_pixels || sample >= RAYS_PER_PIXEL) return;
-    int ray_i = pixel_i * RAYS_PER_PIXEL + sample;
-    int pixel_grid_row = sample / PIXEL_RAY_GRID_DIM; // possibly optimised by compiler
-    int pixel_grid_col = sample - PIXEL_RAY_GRID_DIM * pixel_grid_row; // avoid costly modulus operation
+    if (pixel_i >= cur_tile_pixels || sample >= rays_per_pixel) return;
+    int ray_i = pixel_i * rays_per_pixel + sample;
+    int pixel_grid_row = sample / pixel_ray_grid_dim; // possibly optimised by compiler
+    int pixel_grid_col = sample - pixel_ray_grid_dim * pixel_grid_row; // avoid costly modulus operation
     ray_dirs[ray_i] = norm_vec(add3_vec(top_left_corners[pixel_i], // overall pixel top left corner
                                         scale_vec(pixel_grid_col + curand_uniform(rand_states + ray_i), left_rights[pixel_i]), // random x/y offsets including pixel grid offset
                                         scale_vec(pixel_grid_row + curand_uniform(rand_states + ray_i), top_bottoms[pixel_i])));
@@ -398,67 +400,70 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     *next_step = true;
 }
 
-__global__ static void calc_pixels(int tile, int cur_tile_pixels, float3* ray_values, bool* ray_light_ints, float3* pixels, float* light_ints) {
+__global__ static void calc_pixels(int tile, int rays_per_pixel, int pixels_per_tile, int cur_tile_pixels, float3* ray_values, bool* ray_light_ints, float3* pixels, float* light_ints) {
     int x = blockIdx.x * blockDim.x + threadIdx.x; // pixel index
     if (x >= cur_tile_pixels) return;
-    int start = x * RAYS_PER_PIXEL; // multiply by number of rays per pixel
-    x += tile * TILE_PIXELS; // shift to current tile
+    int start = x * rays_per_pixel; // multiply by number of rays per pixel
+    x += tile * pixels_per_tile; // shift to current tile
     float3 pixel_acc = ray_values[start];
     float light_acc = ray_light_ints[start];
-    for (int i = 1; i < RAYS_PER_PIXEL; i++) {
+    for (int i = 1; i < rays_per_pixel; i++) {
         add_vec_ip(&pixel_acc, ray_values[start + i]);
         light_acc += ray_light_ints[start + i];
     }
-    float div_rays_per_pixel = __frcp_rn(RAYS_PER_PIXEL);
+    float div_rays_per_pixel = __frcp_rn(rays_per_pixel);
     pixels[x] = scale_vec(div_rays_per_pixel, pixel_acc);
     light_ints[x] = light_acc * div_rays_per_pixel;
 }
 
-void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, float* light_ints) {
+void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, float* light_ints,
+               int x_res, int y_res, int pixel_ray_grid_dim, int pixels_per_tile, int ray_bounce_limit, float x_fov) {
+    int total_pixels = x_res * y_res;
+    int rays_per_pixel = pixel_ray_grid_dim * pixel_ray_grid_dim;
+    int rays_per_tile = rays_per_pixel * pixels_per_tile;
     // Allocate all buffers before execution to allow for tiling
     curandStatePhilox4_32_10_t* rand_states;
-    CUDA_CHECK(cudaMalloc(&rand_states, TILE_RAYS * sizeof(curandStatePhilox4_32_10_t)));
+    CUDA_CHECK(cudaMalloc(&rand_states, rays_per_tile * sizeof(curandStatePhilox4_32_10_t)));
     float3 *top_left_corners, *left_rights, *top_bottoms, *ray_dirs;
-    CUDA_CHECK(cudaMalloc(&top_left_corners, TILE_PIXELS * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&left_rights, TILE_PIXELS * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&top_bottoms, TILE_PIXELS * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_dirs, TILE_RAYS * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&top_left_corners, pixels_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&left_rights, pixels_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&top_bottoms, pixels_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&ray_dirs, rays_per_tile * sizeof(float3)));
     float3 *ray_origins, *ray_throughputs, *ray_values;
-    CUDA_CHECK(cudaMalloc(&ray_origins, TILE_RAYS * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_throughputs, TILE_RAYS * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_values, TILE_RAYS * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&ray_origins, rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&ray_throughputs, rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&ray_values, rays_per_tile * sizeof(float3)));
     ray_collision* last_ray_collisions;
-    CUDA_CHECK(cudaMalloc(&last_ray_collisions, TILE_RAYS * sizeof(ray_collision)));
+    CUDA_CHECK(cudaMalloc(&last_ray_collisions, rays_per_tile * sizeof(ray_collision)));
     float* ray_refr_inds;
-    CUDA_CHECK(cudaMalloc(&ray_refr_inds, TILE_RAYS * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&ray_refr_inds, rays_per_tile * sizeof(float)));
     bool* ray_light_ints;
-    CUDA_CHECK(cudaMalloc(&ray_light_ints, TILE_RAYS * sizeof(bool)));
+    CUDA_CHECK(cudaMalloc(&ray_light_ints, rays_per_tile * sizeof(bool)));
     bool *next_step, next_step_cpy;
     CUDA_CHECK(cudaMalloc(&next_step, sizeof(bool)));
     // Calculate view vectors
-    float y_scale = tanf(Y_FOV * 0.5);
-    float3 view_x_dir = norm_vec(vec_cross_prod(cam_dir, cam_up));
-    float3 view_y_dir = scale_vec(y_scale, norm_vec(vec_cross_prod(cam_dir, view_x_dir)));
-    scale_vec_ip(y_scale * X_RES / Y_RES, &view_x_dir);
+    float x_scale = tanf(x_fov * 0.5);
+    float3 view_x_dir = scale_vec(x_scale, norm_vec(vec_cross_prod(cam_dir, cam_up)));
+    float3 view_y_dir = scale_vec(x_scale * y_res / x_res, norm_vec(vec_cross_prod(cam_dir, view_x_dir)));
     // Initialise RNG states
     {
         int block_size = 512;
-        initialise_rand_states<<<(TILE_RAYS + block_size - 1) / block_size, block_size>>>(CUDA_RAND_SEED, rand_states);
+        initialise_rand_states<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(CUDA_RAND_SEED, rays_per_tile, rand_states);
     }
     CUDA_CHECK(cudaGetLastError());
-    int num_tiles = (TOTAL_PIXELS + TILE_PIXELS - 1) / TILE_PIXELS, cur_tile_pixels, cur_tile_rays;
-    // fprintf(stderr, "total pixles %d, tile pixels %d, num tiles %d\n", TOTAL_PIXELS, TILE_PIXELS, num_tiles);
+    int num_tiles = (total_pixels + pixels_per_tile - 1) / pixels_per_tile, cur_tile_pixels, cur_tile_rays;
+    // fprintf(stderr, "total pixles %d, tile pixels %d, num tiles %d\n", total_pixels, pixels_per_tile, num_tiles);
     for (int tile = 0; tile < num_tiles; tile++) {
-        cur_tile_pixels = min(TILE_PIXELS, TOTAL_PIXELS - tile * TILE_PIXELS);
-        cur_tile_rays = cur_tile_pixels * RAYS_PER_PIXEL;
+        cur_tile_pixels = min(pixels_per_tile, total_pixels - tile * pixels_per_tile);
+        cur_tile_rays = cur_tile_pixels * rays_per_pixel;
         // fprintf(stderr, "doing tile %d of %d, %d pixels and %d rays in tile\n", tile, num_tiles, cur_tile_pixels, cur_tile_rays);
         // Initialise initial rays
         {
             dim3 block_dim;
             block_dim.x = 64; // coalesce writes within 1D block
             dim3 grid_dim;
-            grid_dim.x = (TILE_PIXELS + block_dim.x - 1) / block_dim.x;
-            calc_pixel_rays<<<grid_dim, block_dim>>>(tile, cur_tile_pixels, cam_dir, view_x_dir, view_y_dir, top_left_corners, left_rights, top_bottoms);
+            grid_dim.x = (pixels_per_tile + block_dim.x - 1) / block_dim.x;
+            calc_pixel_rays<<<grid_dim, block_dim>>>(tile, cur_tile_pixels, pixels_per_tile, total_pixels, x_res / 2, y_res / 2, x_res, pixel_ray_grid_dim, cam_dir, view_x_dir, view_y_dir, top_left_corners, left_rights, top_bottoms);
         }
         CUDA_CHECK(cudaGetLastError());
         {
@@ -466,24 +471,24 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
             block_dim.x = 16; // ensure that block is fully utilised with small number of samples per pixel
             block_dim.y = 16;
             dim3 grid_dim;
-            grid_dim.x = (RAYS_PER_PIXEL + block_dim.x - 1) / block_dim.x;
-            grid_dim.y = (TILE_PIXELS + block_dim.y - 1) / block_dim.y;
-            calc_pixel_samples<<<grid_dim, block_dim>>>(cur_tile_pixels, top_left_corners, left_rights, top_bottoms, ray_dirs, rand_states);
+            grid_dim.x = (rays_per_pixel + block_dim.x - 1) / block_dim.x;
+            grid_dim.y = (pixels_per_tile + block_dim.y - 1) / block_dim.y;
+            calc_pixel_samples<<<grid_dim, block_dim>>>(cur_tile_pixels, rays_per_pixel, pixel_ray_grid_dim, top_left_corners, left_rights, top_bottoms, ray_dirs, rand_states);
         }
         CUDA_CHECK(cudaGetLastError());
         // Initialise remaining buffers
         {
             int block_size = 512;
-            initialise_ray_buffers<<<(TILE_RAYS + block_size - 1) / block_size, block_size>>>(cur_tile_rays, cam_pos, ray_origins, ray_throughputs, ray_values, ray_refr_inds, ray_light_ints);
+            initialise_ray_buffers<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, cam_pos, ray_origins, ray_throughputs, ray_values, ray_refr_inds, ray_light_ints);
         }
         CUDA_CHECK(cudaGetLastError());
         // Execute path tracing steps until all rays die
         next_step_cpy = true;
-        for (int steps = 0; next_step_cpy && steps < RAY_BOUNCE_LIMIT; steps++) {
+        for (int steps = 0; next_step_cpy && steps < ray_bounce_limit; steps++) {
             // Run pathtracing step
             CUDA_CHECK(cudaMemset(next_step, 0, sizeof(bool)));
             int block_size = 32;
-            pathtrace_step<<<(TILE_RAYS + block_size - 1) / block_size, block_size>>>(cur_tile_rays, ray_dirs, ray_origins, ray_throughputs, last_ray_collisions, ray_values, ray_refr_inds, rand_states, next_step, !steps, steps > 5, ray_light_ints);
+            pathtrace_step<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, ray_dirs, ray_origins, ray_throughputs, last_ray_collisions, ray_values, ray_refr_inds, rand_states, next_step, !steps, steps > 5, ray_light_ints);
             CUDA_CHECK(cudaGetLastError());
             // Check if next step required
             CUDA_CHECK(cudaMemcpy(&next_step_cpy, next_step, sizeof(bool), cudaMemcpyDeviceToHost));
@@ -493,7 +498,7 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
         // Average final ray samples to produce final pixel values
         {
             int block_size = 512;
-            calc_pixels<<<(TILE_PIXELS + block_size - 1) / block_size, block_size>>>(tile, cur_tile_pixels, ray_values, ray_light_ints, pixels, light_ints);
+            calc_pixels<<<(pixels_per_tile + block_size - 1) / block_size, block_size>>>(tile, rays_per_pixel, pixels_per_tile, cur_tile_pixels, ray_values, ray_light_ints, pixels, light_ints);
         }
         CUDA_CHECK(cudaGetLastError());
     }

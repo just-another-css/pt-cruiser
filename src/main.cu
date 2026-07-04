@@ -35,13 +35,13 @@ static JpegState js;
 // const int img_height = 600;
 
 /* OpenGL & CUDA Initialisation */
-static void init_opengl(void) {
+static void init_opengl(int x_res, int y_res) {
     /* Variable Initialisations */
     if (!glfwInit()) {
         fputs("Failed to initialise GLFW", stderr);
         exit(EXIT_FAILURE);
     }
-    window = glfwCreateWindow(X_RES, Y_RES, "Extension - CUDA Rendering", NULL, NULL);
+    window = glfwCreateWindow(x_res, y_res, "Extension - CUDA Rendering", NULL, NULL);
     if (!window) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -53,7 +53,7 @@ static void init_opengl(void) {
     /* Create PBO */
     glGenBuffers(1, &pbo);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, X_RES * Y_RES * sizeof(uchar4), NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, x_res * y_res * sizeof(uchar4), NULL, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     // Register PBO to CUDA
     cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsRegisterFlagsWriteDiscard);
@@ -64,7 +64,7 @@ static void init_opengl(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
     /* postprocessing setup */
-    postprocess_init(&fb, &ds, X_RES, Y_RES);
+    postprocess_init(&fb, &ds, x_res, y_res);
 }
 
 static void init_device(int num_objects, PointsMesh* meshes) {
@@ -88,14 +88,15 @@ static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, f
     else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1, *cam_up));
 }
 
-static void render_frame(char* img_output, float3 cam_pos, float3 cam_up, float3 cam_dir) {
+static void render_frame(char* img_output, float3 cam_pos, float3 cam_up, float3 cam_dir, RenderParameters params) {
     size_t num_bytes;
     if (!*img_output) {
         CUDA_CHECK(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
         CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void **) &fb.ldr_buf, &num_bytes, cuda_pbo_resource));
     }
 
-    pathtrace(cam_pos, cam_up, cam_dir, fb.hdr_buf, fb.light_mask);
+    pathtrace(cam_pos, cam_up, cam_dir, fb.hdr_buf, fb.light_mask,
+        params.x_res, params.y_res, params.pixel_ray_grid_dim, params.pixels_per_tile, params.ray_bounce_limit, params.x_fov);
 
     /* postprocessing: denoise -> bloom -> tonemap -> gamma -> ldr_buf */
     postprocess_run(&fb, &ds);
@@ -104,7 +105,7 @@ static void render_frame(char* img_output, float3 cam_pos, float3 cam_up, float3
         CUDA_CHECK(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, X_RES, Y_RES, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, params.x_res, params.y_res, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
         glEnable(GL_TEXTURE_2D);
@@ -149,17 +150,18 @@ int main(int argc, char **argv) {
     }
     int num_objects;
     PointsMesh* meshes;
-    parse_file(input_fp, &num_objects, &meshes);
+    RenderParameters params;
+    parse_file(input_fp, &num_objects, &meshes, &params);
     fclose(input_fp);
     
     puts("[+] Successfully parsed!");
     bool use_opengl = argc < 3;
     int jpeg_index = 2;
     if (use_opengl) {
-        init_opengl();
+        init_opengl(params.x_res, params.y_res);
     } else {
         /* postprocessing setup */
-        postprocess_init(&fb, &ds, X_RES, Y_RES);
+        postprocess_init(&fb, &ds, params.x_res, params.y_res);
         postprocess_jpeg_init(&fb, &js, 90);
     }
     
@@ -174,7 +176,7 @@ int main(int argc, char **argv) {
     if (use_opengl) {
         while (!glfwWindowShouldClose(window)) {
             get_key_input(window, &cam_pos, &cam_up, &cam_dir);
-            render_frame("\0", cam_pos, cam_up, cam_dir);
+            render_frame("\0", cam_pos, cam_up, cam_dir, params);
             glfwSwapBuffers(window);
             glfwPollEvents();
             timespec_get(&cur, TIME_UTC);
@@ -183,7 +185,7 @@ int main(int argc, char **argv) {
             prev = cur;
         }
     } else {
-        render_frame(argv[jpeg_index], cam_pos, cam_up, cam_dir);
+        render_frame(argv[jpeg_index], cam_pos, cam_up, cam_dir, params);
         timespec_get(&cur, TIME_UTC);
         float frametime = (cur.tv_sec - prev.tv_sec) * 1000.0 + (cur.tv_nsec - prev.tv_nsec) / 1000000.0;
         fprintf(stderr, "Time: %f ms / %f fps\n", frametime, 1000 / frametime);

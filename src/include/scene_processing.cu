@@ -17,7 +17,7 @@ extern FILE *yyin;
 extern int yyerrors;
 extern Scene_t *parsed_scene;
 
-static void parse_input(int* num_objects, PointsMesh** mesh) {
+static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* params) {
     // Process material names
     char** material_names = (char**) malloc(parsed_scene->mat_len * sizeof(char*));
     for (int i = 0; i < parsed_scene->mat_len; i++) material_names[i] = parsed_scene->materials[i].name;
@@ -233,11 +233,61 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
         }
     }
     initialise_materials_data(texture_paths, transparencies, crit_angles, refr_indices, smoothnesses, roughnesses, num_total_materials); // Copy material data to device and load textures
+    
+    // Process rendering parameters
+    *params = (RenderParameters) {
+        .x_res = X_RES,
+        .y_res = Y_RES,
+        .x_fov = X_FOV,
+        //.y_fov = Y_FOV,
+        .pixel_ray_grid_dim = PIXEL_RAY_GRID_DIM,
+        .ray_bounce_limit = RAY_BOUNCE_LIMIT,
+        .pixels_per_tile = TILE_PIXELS,
+    };
+    bool valid, use_x_fov = true;
+    for (int i = 0; i < parsed_scene->param_len; i++) {
+        valid = true;
+        switch (*parsed_scene->params[i].name) {
+            case 'x':
+                if (!strcmp(parsed_scene->params[i].name + 1, "_res")) params->x_res = parsed_scene->params[i].value;
+                else if (!strcmp(parsed_scene->params[i].name + 1, "_fov")) {
+                    params->x_fov = parsed_scene->params[i].value;
+                    use_x_fov = true;
+                } else valid = false;
+                break;
+            case 'y':
+                if (!strcmp(parsed_scene->params[i].name + 1, "_res")) params->y_res = parsed_scene->params[i].value;
+                else if (!strcmp(parsed_scene->params[i].name + 1, "_fov")) {
+                    params->y_fov = parsed_scene->params[i].value;
+                    use_x_fov = false;
+                } else valid = false;
+                break;
+            case 'p':
+                if (!strcmp(parsed_scene->params[i].name + 1, "ixel_ray_grid_dim")) params->pixel_ray_grid_dim = parsed_scene->params[i].value;
+                else if (!strcmp(parsed_scene->params[i].name + 1, "ixels_per_tile")) params->pixels_per_tile = parsed_scene->params[i].value;
+                else valid = false;
+                break;
+            case 'r':
+                if (!strcmp(parsed_scene->params[i].name + 1, "ay_bounce_limit")) params->ray_bounce_limit = parsed_scene->params[i].value;
+                else valid = false;
+                break;
+            default:
+                valid = false;
+                break;
+        }
+        if (!valid) {
+            fprintf(stderr, "[!] Parameter #%d '%s' with values %f was not recognised", i, parsed_scene->params[i].name, parsed_scene->params[i].value);
+            exit(EXIT_FAILURE);
+        }
+    }
+    if (use_x_fov) params->y_fov = params->x_fov * params->y_res / params->x_res;
+    else params->x_fov = params->y_fov * params->x_res / params->y_res;
+
     // Free parsed scene struct
     free_scene(parsed_scene);
 }
 
-void parse_file(FILE* input, int* num_objects, PointsMesh** meshes) {
+void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params) {
     yyin = input;
     puts("[*] Starting parsing...");
     int result = yyparse();
@@ -246,5 +296,5 @@ void parse_file(FILE* input, int* num_objects, PointsMesh** meshes) {
         exit(EXIT_FAILURE);
     }
     puts("[*] Parsing finished");
-    parse_input(num_objects, meshes);
+    parse_input(num_objects, meshes, params);
 }

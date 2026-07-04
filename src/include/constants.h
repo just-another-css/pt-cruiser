@@ -13,12 +13,11 @@
 #include <stdlib.h>
 
 #define X_RES 3848
-#define X_RES_HALF (X_RES / 2)
 #define Y_RES 2160
-#define Y_RES_HALF (Y_RES / 2)
-#define TOTAL_PIXELS (X_RES * Y_RES)
-
-#define Y_FOV 0.85
+#define X_FOV 1.75
+#define PIXEL_RAY_GRID_DIM 10
+#define RAY_BOUNCE_LIMIT 16
+#define TILE_PIXELS 262144 // 2^18
 
 #define CUDA_RAND_SEED 123456
 
