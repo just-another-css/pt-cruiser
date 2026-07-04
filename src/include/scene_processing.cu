@@ -114,9 +114,6 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                 fprintf(stderr, "[!] UV data is missing for object %d, face %d\n", i, tri);
                 exit(EXIT_FAILURE);
             }
-            if (tri && (*mesh)[i].materials[tri] != (*mesh)[i].materials[tri - 1]) {
-                printf("[!] Note: In object %d, face %d is using a different material than others in the object.\n", i, tri);
-            }
         }
         for (int v = 0; v < num_vertices; v++) {
             Vec_t now_v = parsed_scene->objects[i].points->list[v];
