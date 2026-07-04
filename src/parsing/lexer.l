@@ -38,7 +38,7 @@ WS          [ \t\r]+
 "colour"            { return TOK_COLOUR; }
 "material"          { return TOK_MATERIAL; }
 "lighting"          { return TOK_LIGHTING; }
-"uv"                { return TOK_UV; }
+"uvs"               { return TOK_UV; }
 
 "texture"           { yylval.sval = strdup(yytext); return TOK_TEXTURE; }
 "transparency"      |
