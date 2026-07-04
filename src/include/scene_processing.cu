@@ -111,8 +111,9 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                 (*mesh)[i].lightings[tri] = default_lighting_set ? default_lighting : make_float3(0,0,0); // default to unlit or object lighting
             }
             if (!uv_flag) {
-                fprintf(stderr, "[!] UV data is missing for object %d, face %d\n", i, tri);
-                exit(EXIT_FAILURE);
+                (*mesh)[i].uv[tri * 3] = make_float2(0, 0);
+                (*mesh)[i].uv[tri * 3 + 1] = make_float2(1, 0);
+                (*mesh)[i].uv[tri * 3 + 2] = make_float2(0, 1);
             }
         }
         for (int v = 0; v < num_vertices; v++) {
