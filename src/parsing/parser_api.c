@@ -8,6 +8,14 @@
 #define INT_LIST_INITIAL_CAPACITY 4
 #define LIST_INITIAL_CAPACITY 256
 
+static void resize_list(void** list, int len, int* cap, size_t elem_size) {
+    if (len + 1 >= *cap) {
+        *cap <<= 1;
+        *list = realloc(*list, *cap * elem_size);
+        assert(*list);
+    }
+}
+
 UV make_uv(float x, float y) {
     UV uv = {
         .x = x,
@@ -67,11 +75,7 @@ DescArgs* make_desc_args(DescArg head) {
 }
 
 static void resize_desc_args(DescArgs *args) {
-    if (args->len + 1 >= args->capacity) {
-        args->capacity <<= 1;
-        args->args = realloc(args->args, args->capacity * sizeof(DescArg));
-        assert (args->args);
-    }
+    resize_list(&args->args, args->len, &args->capacity, sizeof(DescArg));
 }
 
 DescArgs* append_desc_args(DescArgs* args, DescArg value) {
@@ -106,11 +110,7 @@ IntList* make_int_list(int head) {
 }
 
 static void resize_int_list(IntList *list) {
-    if (list->len + 1 >= list->capacity) {
-        list->capacity <<= 1;
-        list->list = realloc(list->list, list->capacity * sizeof(int));
-        assert (list->list);
-    }
+    resize_list(&list->list, list->len, &list->capacity, sizeof(int));
 }
 
 IntList* append_int_list(IntList *int_list, int value) {
@@ -151,11 +151,7 @@ FaceList_t* make_face_list(Face_t face) {
 }
 
 static void resize_face_list(FaceList_t *list) {
-    if (list->len + 1 >= list->capacity) {
-        list->capacity <<= 1;
-        list->faces = realloc(list->faces, list->capacity * sizeof(Face_t));
-        assert(list->faces);
-    }
+    resize_list(&list->faces, list->len, &list->capacity, sizeof(Face_t));
 }
 
 FaceList_t* append_face_list(FaceList_t* facelist, Face_t face) {
@@ -193,11 +189,7 @@ VecList_t* make_vecs(Vec_t head) {
 }
 
 static void resize_vecs(VecList_t *vecs) {
-    if (vecs->len + 1 >= vecs->capacity) {
-        vecs->capacity <<= 1;
-        vecs->list = realloc(vecs->list, vecs->capacity * sizeof(Vec_t));
-        assert (vecs->list);
-    }
+    resize_list(&vecs->list, vecs->len, &vecs->capacity, sizeof(Vec_t));
 }
 
 VecList_t* append_vecs(VecList_t *vecs, Vec_t value) {
@@ -342,11 +334,7 @@ Scene_t* make_scene(Definition_t definition) {
 }
 
 static void resize_scene_obj(Scene_t* scene) {
-    if (scene->obj_len + 1 >= scene->obj_capacity) {
-        scene->obj_capacity <<= 1;
-        scene->objects = realloc(scene->objects, scene->obj_capacity * sizeof(Obj_t));
-        assert(scene->objects != NULL);
-    }
+    resize_list(&scene->objects, scene->obj_len, &scene->obj_capacity, sizeof(Obj_t));
 }
 
 static Scene_t* append_scene_obj(Scene_t* scene, Obj_t object) {
@@ -356,11 +344,7 @@ static Scene_t* append_scene_obj(Scene_t* scene, Obj_t object) {
 }
 
 static void resize_scene_mat(Scene_t* scene) {
-    if (scene->mat_len + 1 >= scene->mat_capacity) {
-        scene->mat_capacity <<= 1;
-        scene->materials = realloc(scene->materials, scene->obj_capacity * sizeof(Obj_t));
-        assert(scene->materials != NULL);
-    }
+    resize_list(&scene->materials, scene->mat_len, &scene->mat_capacity, sizeof(Mat_t));
 }
 
 static Scene_t* append_scene_mat(Scene_t* scene, Mat_t material) {
