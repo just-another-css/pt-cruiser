@@ -131,6 +131,7 @@ ints        : ints TOK_COMMA TOK_INT                    { $$ = append_int_list($
 
 desc_args   : desc_args desc_arg                        { $$ = append_desc_args($1, $2); }
             | desc_arg                                  { $$ = make_desc_args($1); }
+            |                                           { $$ = make_empty_desc_args(); }
             ;
 
 desc_arg    : TOK_COMMA TOK_MATERIAL

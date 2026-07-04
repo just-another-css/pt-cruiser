@@ -130,6 +130,7 @@ extern DescArg make_lighting(float value);
 extern DescArg make_uvdata(UVs *uvs);
 
 extern DescArgs* make_desc_args(DescArg head);
+extern DescArgs* make_empty_desc_args(void);
 extern DescArgs* append_desc_args(DescArgs* args, DescArg value);
 extern void free_desc_args(DescArgs* args);
 
