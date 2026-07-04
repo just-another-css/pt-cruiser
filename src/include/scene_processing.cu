@@ -208,6 +208,6 @@ void parse_file(FILE* input, int* num_objects, PointsMesh** meshes) {
         fprintf(stderr, "[!] Parsing failed with %d errors!\n", yyerrors);
         exit(EXIT_FAILURE);
     }
-    fprintf(stderr, "[!] Parsing finished");
+    puts("[*] Parsing finished");
     parse_input(num_objects, meshes);
 }
