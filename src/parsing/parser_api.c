@@ -57,18 +57,17 @@ DescArg make_material(char *text) {
 }
 
 DescArg make_lighting(float value) {
-    DescArg result;
-    result.type = LIGHTING_DESC_ARG;
-    result.lighting = value;
-    return result;
+    return (DescArg) {
+        .type = LIGHTING_DESC_ARG,
+        .lighting = value
+    };
 }
 
 DescArg make_uvdata(UVs *uvs) {
-    DescArg result = {
+    return (DescArg) {
         .type = UV_DESC_ARG,
         .uvs = uvs
     };
-    return result;
 }
 
 DescArgs* make_desc_args(DescArg head) {
