@@ -95,6 +95,7 @@ typedef struct {
 
 typedef struct {
     char* name;
+    char* base;
     MatArgs* args;
 } Mat_t;
 
@@ -156,7 +157,7 @@ extern MatArg make_mat_num_arg(char* arg, float num_val);
 extern MatArgs* make_mat_args(MatArg arg);
 extern MatArgs* append_mat_args(MatArgs* args, MatArg arg);
 
-extern Mat_t make_material_def(char* name, MatArgs* args);
+extern Mat_t make_material_def(char* name, char* base_mat, MatArgs* args);
 extern void free_material(Mat_t material);
 
 extern Definition_t union_obj(Obj_t obj);

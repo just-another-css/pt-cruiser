@@ -6,6 +6,7 @@ extern "C" {
 #include "scene_processing.h"
 
 #define INVALID_MATERIAL -1
+#define UNASSIGNED -1
 
 static int find_material(char* material, char** materials, int num_materials) {
     for (int i = 0; i < num_materials; i++) if (!strcmp(material, materials[i])) return i;
@@ -130,14 +131,6 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
         *refr_indices = (float*) malloc(num_total_materials * sizeof(float)),
         *smoothnesses = (float*) malloc(num_total_materials * sizeof(float)),
         *roughnesses = (float*) malloc(num_total_materials * sizeof(float));
-    for (int i = 0; i < parsed_scene->mat_len; i++) { // Set parameters for explicitly defined materials
-        texture_paths[i] = parsed_scene->materials[i].args->texture_path;
-        transparencies[i] = parsed_scene->materials[i].args->transparency;
-        crit_angles[i] = parsed_scene->materials[i].args->crit_angle;
-        refr_indices[i] = parsed_scene->materials[i].args->refr_index;
-        smoothnesses[i] = parsed_scene->materials[i].args->smoothness;
-        roughnesses[i] = parsed_scene->materials[i].args->roughness;
-    }
     for (int i = parsed_scene->mat_len; i < num_total_materials; i++) { // Load parameters for any default materials used by objects
         bool material_loaded = false;
         for (int j = 0; j < NUM_DEFAULT_MATERIALS; j++) {
@@ -150,6 +143,56 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
         if (!material_loaded) {
             fprintf(stderr, "[!] Default material %d (%s) could not be loaded\n", i, default_material_names[i]);
             exit(EXIT_FAILURE);
+        }
+    }
+    for (int i = 0; i < parsed_scene->mat_len; i++) { // Set parameters for explicitly defined materials
+        if (parsed_scene->materials[i].base) { // use base material for any unassigned parameters
+            int base_i = find_material(parsed_scene->materials[i].base, material_names, i);
+            bool material_loaded = false;
+            if (base_i == INVALID_MATERIAL) { // base material is not a custom material defined before the current material
+                int default_mat_i = find_material(parsed_scene->materials[i].base, default_material_names, NUM_DEFAULT_MATERIALS);
+                if (default_mat_i != INVALID_MATERIAL) { // base material was a default material
+                    if (!use_default_materials[default_mat_i]) { // default material has not been loaded in first pass
+                        load_default_material(default_mat_i, texture_paths + i, transparencies + i, crit_angles + i, refr_indices + i, smoothnesses + i, roughnesses + i); // load default material directly and skip loading later
+                        material_loaded = true;
+                    }
+                }
+            }
+            if (!material_loaded) { // base material has not been loaded directly; copy from existing material
+                if (base_i == INVALID_MATERIAL) { // base material was never found and was not loaded directly
+                    fprintf(stderr, "[!] Material #%d '%s' uses nonexistent base material '%s'", i, parsed_scene->materials[i].name, parsed_scene->materials[i].base);
+                    exit(EXIT_FAILURE);
+                }
+                texture_paths[i] = texture_paths[base_i];
+                transparencies[i] = transparencies[base_i];
+                crit_angles[i] = crit_angles[base_i];
+                refr_indices[i] = refr_indices[base_i];
+                smoothnesses[i] = smoothnesses[base_i];
+                roughnesses[i] = roughnesses[base_i];
+            }
+            if (parsed_scene->materials[i].args) { // at least some parameters have been changed from base material
+                if (parsed_scene->materials[i].args->texture_path != NULL) texture_paths[i] = parsed_scene->materials[i].args->texture_path;
+                if (parsed_scene->materials[i].args->transparency != UNASSIGNED) transparencies[i] = parsed_scene->materials[i].args->transparency;
+                if (parsed_scene->materials[i].args->crit_angle != UNASSIGNED) crit_angles[i] = parsed_scene->materials[i].args->crit_angle;
+                if (parsed_scene->materials[i].args->refr_index != UNASSIGNED) refr_indices[i] = parsed_scene->materials[i].args->refr_index;
+                if (parsed_scene->materials[i].args->smoothness != UNASSIGNED) smoothnesses[i] = parsed_scene->materials[i].args->smoothness;
+                if (parsed_scene->materials[i].args->roughness != UNASSIGNED) roughnesses[i] = parsed_scene->materials[i].args->roughness;
+            }
+        } else { // no base material, default to zero
+            if (!parsed_scene->materials[i].args) {
+                fprintf(stderr, "[!] Material #%d '%s' has no provided arguments and no base material", i, parsed_scene->materials[i].name);
+                exit(EXIT_FAILURE);
+            }
+            if (parsed_scene->materials[i].args->texture_path != NULL) texture_paths[i] = parsed_scene->materials[i].args->texture_path;
+            else {
+                fprintf(stderr, "[!] Material #%d '%s' has no provided texture and no base material", i, parsed_scene->materials[i].name);
+                exit(EXIT_FAILURE);
+            }
+            transparencies[i] = parsed_scene->materials[i].args->transparency != UNASSIGNED ? parsed_scene->materials[i].args->transparency : 0;
+            crit_angles[i] = parsed_scene->materials[i].args->crit_angle != UNASSIGNED ? parsed_scene->materials[i].args->crit_angle : 0;
+            refr_indices[i] = parsed_scene->materials[i].args->refr_index != UNASSIGNED ? parsed_scene->materials[i].args->refr_index : 0;
+            smoothnesses[i] = parsed_scene->materials[i].args->smoothness != UNASSIGNED ? parsed_scene->materials[i].args->smoothness : 0;
+            roughnesses[i] = parsed_scene->materials[i].args->roughness != UNASSIGNED ? parsed_scene->materials[i].args->roughness : 0;
         }
     }
     initialise_materials_data(texture_paths, transparencies, crit_angles, refr_indices, smoothnesses, roughnesses, num_total_materials); // Copy material data to device and load textures

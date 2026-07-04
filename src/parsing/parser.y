@@ -151,7 +151,12 @@ uv          : TOK_LPAREN TOK_FLOAT TOK_COMMA
               TOK_FLOAT TOK_RPAREN                      { $$ = make_uv($2, $4); }
             ;
 
-material    : TOK_STRING TOK_COLON TOK_LSQBRACKET mat_args TOK_RSQBRACKET { $$ = make_material_def($1, $4); }
+material    : TOK_STRING TOK_COLON
+              TOK_LSQBRACKET mat_args TOK_RSQBRACKET    { $$ = make_material_def($1, NULL, $4); }
+            | TOK_STRING TOK_COLON TOK_STRING
+              TOK_LSQBRACKET mat_args TOK_RSQBRACKET    { $$ = make_material_def($1, $3, $5); }
+            | TOK_STRING TOK_COLON TOK_STRING
+              TOK_LSQBRACKET TOK_RSQBRACKET             { $$ = make_material_def($1, $3, NULL); }
             ;
 
 mat_args    : mat_args TOK_COMMA mat_arg                { $$ = append_mat_args($1, $3); }

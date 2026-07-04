@@ -228,6 +228,12 @@ MatArgs* append_mat_args(MatArgs* args, MatArg arg);
 MatArgs* make_mat_args(MatArg arg) {
     MatArgs* args = malloc(sizeof(MatArgs));
     assert(args);
+    args->texture_path = NULL;
+    args->transparency = -1;
+    args->crit_angle = -1;
+    args->refr_index = -1;
+    args->smoothness = -1;
+    args->roughness = -1;
     return append_mat_args(args, arg);
 }
 
@@ -255,17 +261,20 @@ MatArgs* append_mat_args(MatArgs* args, MatArg arg) {
     return args;
 }
 
-Mat_t make_material_def(char* name, MatArgs* args) {
+Mat_t make_material_def(char* name, char* base_mat, MatArgs* args) {
     return (Mat_t) {
         .name = name,
+        .base = base_mat,
         .args = args
     };
 }
 
 void free_material(Mat_t material) {
     free(material.name);
-    free(material.args->texture_path);
-    free(material.args);
+    if (material.args) {
+        free(material.args->texture_path);
+        free(material.args);
+    }
 }
 
 Definition_t union_obj(Obj_t obj) {
