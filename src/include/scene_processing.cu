@@ -48,9 +48,10 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
         MALLOC_CHECK((*mesh)[i].lightings);
         (*mesh)[i].uv = (float2*) malloc(3 * num_triangles * sizeof(float2));
         MALLOC_CHECK((*mesh)[i].uv);
-        bool object_material_set = false, object_lighting_set = false;
+        bool object_material_set = false, object_lighting_set = false, object_uvs_set = false;
         int object_material;
         float3 object_lighting;
+        float2 object_uvs[3];
         float value;
         for (int a = 0; a < parsed_scene->objects[i].desc_args->len; a++) {
             switch (parsed_scene->objects[i].desc_args->args[a].type) {
@@ -74,6 +75,15 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                     value = parsed_scene->objects[i].desc_args->args[a].lighting;
                     object_lighting = make_float3(value, value, value);
                     object_lighting_set = true;
+                    break;
+                case UV_DESC_ARG:
+                    object_uvs[0] = make_float2(parsed_scene->objects[i].desc_args->args[a].uvs->list[0].x,
+                                                parsed_scene->objects[i].desc_args->args[a].uvs->list[0].y);
+                    object_uvs[1] = make_float2(parsed_scene->objects[i].desc_args->args[a].uvs->list[1].x,
+                                                parsed_scene->objects[i].desc_args->args[a].uvs->list[1].y);
+                    object_uvs[2] = make_float2(parsed_scene->objects[i].desc_args->args[a].uvs->list[2].x,
+                                                parsed_scene->objects[i].desc_args->args[a].uvs->list[2].y);
+                    object_uvs_set = true;
                     break;
             }
         }
@@ -134,9 +144,15 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                 (*mesh)[i].lightings[tri] = object_lighting_set ? object_lighting : make_float3(0,0,0); // default to unlit or object lighting
             }
             if (!uv_flag) {
-                (*mesh)[i].uv[tri * 3] = make_float2(0, 0);
-                (*mesh)[i].uv[tri * 3 + 1] = make_float2(1, 0);
-                (*mesh)[i].uv[tri * 3 + 2] = make_float2(0, 1);
+                if (object_uvs_set) {
+                    (*mesh)[i].uv[tri * 3] = object_uvs[0];
+                    (*mesh)[i].uv[tri * 3 + 1] = object_uvs[1];
+                    (*mesh)[i].uv[tri * 3 + 2] = object_uvs[2];
+                } else {
+                    (*mesh)[i].uv[tri * 3] = make_float2(0, 0);
+                    (*mesh)[i].uv[tri * 3 + 1] = make_float2(1, 0);
+                    (*mesh)[i].uv[tri * 3 + 2] = make_float2(0, 1);
+                }
             }
         }
         for (int v = 0; v < num_vertices; v++) {
