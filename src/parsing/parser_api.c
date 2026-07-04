@@ -85,10 +85,6 @@ static void resize_desc_args(DescArgs *args) {
 DescArgs* append_desc_args(DescArgs* args, DescArg value) {
     resize_desc_args(args);
     args->args[args->len++] = value;
-    if (args->len > 3) {
-        fputs("[!] More than 3 arguments is given for Description Arguments!", stderr);
-        exit(EXIT_FAILURE);
-    }
     return args;
 }
 
