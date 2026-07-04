@@ -14,7 +14,8 @@ typedef enum {
 
     // Numbers
     TOK_INT,
-    TOK_FLOAT,
+    TOK_POSFLOAT,
+    TOK_NEGFLOAT,
 
     // Text
     TOK_STRING,

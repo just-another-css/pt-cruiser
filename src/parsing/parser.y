@@ -56,7 +56,7 @@ int yywrap(void) {
 }
 
 %token TOK_POINTS TOK_FACES TOK_CENTRE TOK_COLOUR TOK_MATERIAL TOK_LIGHTING TOK_UV
-%token <fval> TOK_FLOAT
+%token <fval> TOK_POSFLOAT TOK_NEGFLOAT
 %token <ival> TOK_INT
 %token <sval> TOK_STRING TOK_MAT_NUM_ARG TOK_TEXTURE TOK_FILEPATH
 %token <sval> TOK_IDENT
@@ -78,6 +78,7 @@ int yywrap(void) {
 %type <m> material
 %type <mas> mat_args
 %type <ma> mat_arg
+%type <fval> float
 
 %start top
 
@@ -106,9 +107,9 @@ vecs        : vecs TOK_COMMA vec                        { $$ = append_vecs($1, $
             | vec                                       { $$ = make_vecs($1); }
             ;
 
-vec         : TOK_LPAREN TOK_FLOAT TOK_COMMA
-              TOK_FLOAT TOK_COMMA
-              TOK_FLOAT TOK_RPAREN                      { $$ = make_vec($2, $4, $6); }
+vec         : TOK_LPAREN float TOK_COMMA
+              float TOK_COMMA
+              float TOK_RPAREN                          { $$ = make_vec($2, $4, $6); }
             ;
 
 face_list   : TOK_LSQBRACKET faces TOK_RSQBRACKET       { $$ = $2; }
@@ -137,7 +138,7 @@ desc_args   : desc_args desc_arg                        { $$ = append_desc_args(
 desc_arg    : TOK_COMMA TOK_MATERIAL
               TOK_EQUALS TOK_STRING                     { $$ = make_material($4); }
             | TOK_COMMA TOK_LIGHTING
-              TOK_EQUALS TOK_FLOAT                      { $$ = make_lighting($4); }
+              TOK_EQUALS TOK_POSFLOAT                   { $$ = make_lighting($4); }
             | TOK_COMMA TOK_UV TOK_EQUALS uv_list       { $$ = make_uvdata($4); }
             ;
 
@@ -148,8 +149,8 @@ uvs         : uvs TOK_COMMA uv                          { $$ = append_uvs($1, $3
             | uv                                        { $$ = make_uvs($1); }
             ;
 
-uv          : TOK_LPAREN TOK_FLOAT TOK_COMMA
-              TOK_FLOAT TOK_RPAREN                      { $$ = make_uv($2, $4); }
+uv          : TOK_LPAREN TOK_POSFLOAT TOK_COMMA
+              TOK_POSFLOAT TOK_RPAREN                   { $$ = make_uv($2, $4); }
             ;
 
 material    : TOK_STRING TOK_COLON
@@ -165,5 +166,9 @@ mat_args    : mat_args TOK_COMMA mat_arg                { $$ = append_mat_args($
             ;
 
 mat_arg     : TOK_TEXTURE TOK_EQUALS TOK_FILEPATH       { $$ = make_mat_texture($3); }
-            | TOK_MAT_NUM_ARG TOK_EQUALS TOK_FLOAT      { $$ = make_mat_num_arg($1, $3); }
+            | TOK_MAT_NUM_ARG TOK_EQUALS TOK_POSFLOAT   { $$ = make_mat_num_arg($1, $3); }
+            ;
+
+float       : TOK_POSFLOAT
+            | TOK_NEGFLOAT
             ;

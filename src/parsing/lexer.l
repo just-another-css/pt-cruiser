@@ -22,7 +22,8 @@ void lex_error(char ch, int line) {
 
 DIGIT       [0-9]
 INT         {DIGIT}+
-FLOAT       -?{INT}\.{INT}
+POSFLOAT    {INT}\.{INT}
+NEGFLOAT    -{INT}\.{INT}
 ALPHA       [A-Za-z]
 NAME        {ALPHA}+
 TEXT        {ALPHA}([A-Za-z\-_ ])*
@@ -47,14 +48,19 @@ WS          [ \t\r]+
 "smoothness"        |
 "roughness"         { yylval.sval = strdup(yytext); return TOK_MAT_NUM_ARG; }
 
-{FLOAT}             {   
-                        yylval.fval = atof(yytext);
-                        return TOK_FLOAT;
-                    }
-
-{INT}               {   
+{INT}               {
                         yylval.ival = atoi(yytext);
                         return TOK_INT;
+                    }
+
+{POSFLOAT}          {
+                        yylval.fval = atof(yytext);
+                        return TOK_POSFLOAT;
+                    }
+
+{NEGFLOAT}          {
+                        yylval.fval = atof(yytext);
+                        return TOK_NEGFLOAT;
                     }
 
 \"({TEXT})\"        {
