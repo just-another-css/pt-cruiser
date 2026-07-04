@@ -54,7 +54,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
         float value;
         for (int a = 0; a < parsed_scene->objects[i].desc_args->len; a++) {
             switch (parsed_scene->objects[i].desc_args->args[a].type) {
-                case 0: // material
+                case MATERIAL_DESC_ARG:
                     object_material = find_material(parsed_scene->objects[i].desc_args->args[a].material, material_names, parsed_scene->mat_len);
                     if (object_material == INVALID_MATERIAL) {
                         object_material = find_material(parsed_scene->objects[i].desc_args->args[a].material, default_material_names, NUM_DEFAULT_MATERIALS);
@@ -70,7 +70,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                     }
                     object_material_set = true;
                     break;
-                case 1: // lighting
+                case LIGHTING_DESC_ARG:
                     value = parsed_scene->objects[i].desc_args->args[a].lighting;
                     object_lighting = make_float3(value, value, value);
                     object_lighting_set = true;
@@ -85,7 +85,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
             float intensity;
             for (int a = 0; a < parsed_scene->objects[i].faces->faces[tri].desc_args->len; a++) {
                 switch (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].type) {
-                    case 0: // material
+                    case MATERIAL_DESC_ARG:
                         (*mesh)[i].materials[tri] = find_material(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].material, material_names, parsed_scene->mat_len);
                         if ((*mesh)[i].materials[tri] == INVALID_MATERIAL) {
                             (*mesh)[i].materials[tri] = find_material(parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].material, default_material_names, NUM_DEFAULT_MATERIALS);
@@ -101,12 +101,12 @@ static void parse_input(int* num_objects, PointsMesh** mesh) {
                         }
                         material_flag = true;
                         break;
-                    case 1: // lighting
+                    case LIGHTING_DESC_ARG:
                         intensity = parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].lighting;
                         (*mesh)[i].lightings[tri] = make_float3(intensity, intensity, intensity); // lighting is effectively a scalar applied to the colour of the object's texture
                         lighting_flag = true;
                         break;
-                    case 2: // uv
+                    case UV_DESC_ARG:
                         if (parsed_scene->objects[i].faces->faces[tri].desc_args->args[a].uvs->len != 3) {
                             fprintf(stderr, "[!] A face must have three uvs! Error on object %d face %d\n", i, tri);
                             exit(EXIT_FAILURE);

@@ -51,21 +51,21 @@ UVs* append_uvs(UVs *uvs, UV value) {
 
 DescArg make_material(char *text) {
     return (DescArg) {
-        .type = 0,
+        .type = MATERIAL_DESC_ARG,
         .material = text
     };
 }
 
 DescArg make_lighting(float value) {
     DescArg result;
-    result.type = 1;
+    result.type = LIGHTING_DESC_ARG;
     result.lighting = value;
     return result;
 }
 
 DescArg make_uvdata(UVs *uvs) {
     DescArg result = {
-        .type = 2,
+        .type = UV_DESC_ARG,
         .uvs = uvs
     };
     return result;
@@ -94,7 +94,7 @@ DescArgs* append_desc_args(DescArgs* args, DescArg value) {
 
 void free_desc_args(DescArgs* args) {
     for (int i = 0; i < args->len; i++) {
-        if (args->args[i].type == 2) {
+        if (args->args[i].type == UV_DESC_ARG) {
             free(args->args[i].uvs);
         }
     }

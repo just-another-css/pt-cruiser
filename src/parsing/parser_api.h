@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#define MATERIAL_DESC_ARG 0
+#define LIGHTING_DESC_ARG 1
+#define UV_DESC_ARG 2
+
 typedef struct {
     float x;
     float y;
