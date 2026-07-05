@@ -137,7 +137,18 @@ static void clean_device(void) {
     free_objects();
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only) {
+static void process_float3_args(int argc, char** argv, int* i, float3* value) {
+    float* value_f = &value->x;
+    for (int j = 0; j < 3; j++) {
+        if (*i + 1 == argc) { // i starts at option; move to first component argument
+            fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i - j - 1]);
+            exit(EXIT_FAILURE);
+        }
+        value_f[j] = atof(argv[(*i)++ + 1]);
+    }
+}
+
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, float3* cam_pos, float3* cam_dir, float3* cam_up) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
     *nvjpeg_first_only = false;
@@ -156,6 +167,9 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
         }
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) *use_opengl = true;
         else if (!strcmp(argv[i] + 1, "fio") || !strcmp(argv[i] + 1, "-first-image-only")) *nvjpeg_first_only = true;
+        else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, cam_pos);
+        else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, cam_dir);
+        else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, cam_up);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
@@ -183,7 +197,12 @@ int main(int argc, char **argv) {
     
     bool use_opengl, nvjpeg_first_only;
     char* nvjpeg_output;
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only);
+
+    // float3 cam_pos = make_float3(-4000, 400, -1500), cam_dir = make_float3(1,0,0), cam_up = make_float3(0,1,0); // PT Cruiser scene
+    float3 cam_pos = make_float3(0, 0, -3), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Cornell box
+    //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
+
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &cam_pos, &cam_dir, &cam_up);
 
     if (use_opengl) init_opengl(params.x_res, params.y_res);
     if (nvjpeg_output) {
@@ -193,10 +212,6 @@ int main(int argc, char **argv) {
     }
     
     init_device(num_objects, meshes);
-
-    // float3 cam_pos = make_float3(-4000, 400, -1500), cam_up = make_float3(0,1,0), cam_dir = make_float3(1,0,0); // PT Cruiser scene
-    float3 cam_pos = make_float3(0, 0, -3), cam_up = make_float3(0,1,0), cam_dir = make_float3(0,0,1); // Cornell box
-    //float3 cam_pos = make_float3(0, 0, 0), cam_up = make_float3(0,1,0), cam_dir = make_float3(0,0,1); // Default
     
     struct timespec prev, cur;
     timespec_get(&prev, TIME_UTC);
