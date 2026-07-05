@@ -34,7 +34,7 @@ extern void postprocess_cleanup(FrameBuffers *fb, DenoiserState *ds);
 extern void postprocess_denoise(FrameBuffers *fb, DenoiserState *ds);
 extern void postprocess_bloom(FrameBuffers *fb);
 extern void postprocess_tonemap_gamma(FrameBuffers *fb);
-extern void postprocess_run(FrameBuffers *fb, DenoiserState *ds);
+extern void postprocess_run(FrameBuffers *fb, DenoiserState *ds, bool use_bloom);
 
 typedef struct {
     nvjpegHandle_t        handle;

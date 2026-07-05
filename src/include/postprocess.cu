@@ -242,9 +242,10 @@ void postprocess_tonemap_gamma(FrameBuffers *fb) {
     CUDA_CHECK(cudaDeviceSynchronize());
 }
 
-void postprocess_run(FrameBuffers *fb, DenoiserState *ds) {
+void postprocess_run(FrameBuffers *fb, DenoiserState *ds, bool use_bloom) {
     postprocess_denoise(fb, ds);
-    postprocess_bloom(fb);
+    if (use_bloom) postprocess_bloom(fb);
+    else CUDA_CHECK(cudaMemset(fb->bloom_tmp, 0, fb->width * fb->height * sizeof(float3))); // zero input array before tonemapping
     postprocess_tonemap_gamma(fb);
 }
 
