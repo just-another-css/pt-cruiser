@@ -91,11 +91,8 @@ __device__ static __forceinline__ float3 norm_vec_safe(float3 vec) {
     return mag_sqr < FLT_EPSILON ? make_float3(1,0,0) : scale_vec(rsqrtf(mag_sqr), vec); // ensure that magnitude is nonzero before attempting to normalise
 }
 
-__device__ static __forceinline__ void norm_vec_ip(float3* vec) {
-    float mag = vec_mag(*vec);
-    vec->x = fdividef(vec->x, mag);
-    vec->y = fdividef(vec->y, mag);
-    vec->z = fdividef(vec->z, mag);
+__host__ __device__ static __forceinline__ void norm_vec_ip(float3* vec) {
+    scale_vec_ip(rsqrtf(vec_dot_sqr(*vec)), vec);
 }
 
 __device__ static __forceinline__ float vec_dot_prod(float3 vec1, float3 vec2) {
