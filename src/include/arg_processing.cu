@@ -1,4 +1,5 @@
 #include "arg_processing.h"
+#include "scene_processing.h"
 
 static void process_int_arg(int argc, char** argv, int* i, int* value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
@@ -18,7 +19,12 @@ static void process_float_arg(int argc, char** argv, int* i, float* value) {
         fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i]);
         exit(EXIT_FAILURE);
     }
-    *value = atof(argv[(*i)++ + 1]);
+    char* endptr;
+    *value = strtof(argv[(*i)++ + 1], &endptr);
+    if (*endptr) {
+        fprintf(stderr, "[!] Incorrectly formatted value '%s' for option '%s' (expected a float)\n", argv[*i], argv[*i - 1]);
+        exit(EXIT_FAILURE);
+    }
 }
 
 static void process_float3_args(int argc, char** argv, int* i, float3* value) {
