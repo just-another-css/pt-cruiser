@@ -148,10 +148,11 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value) {
     }
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, float3* cam_pos, float3* cam_dir, float3* cam_up) {
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, float3* cam_pos, float3* cam_dir, float3* cam_up) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
     *nvjpeg_first_only = false;
+    *show_frametime = false;
     for (int i = 2; i < argc; i++) {
         if (*argv[i] != '-') {
             fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
@@ -167,6 +168,7 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
         }
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) *use_opengl = true;
         else if (!strcmp(argv[i] + 1, "fio") || !strcmp(argv[i] + 1, "-first-image-only")) *nvjpeg_first_only = true;
+        else if (!strcmp(argv[i] + 1, "ft") || !strcmp(argv[i] + 1, "-show-frametime")) *show_frametime = true;
         else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, cam_pos);
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, cam_dir);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, cam_up);
@@ -175,6 +177,14 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
             exit(EXIT_FAILURE);
         }
     }
+}
+
+static void calc_frametime(struct timespec* prev) {
+    struct timespec cur;
+    timespec_get(&cur, TIME_UTC);
+    float frametime = (cur.tv_sec - prev->tv_sec) * 1000.0 + (cur.tv_nsec - prev->tv_nsec) / 1000000.0;
+    fprintf(stderr, "Time: %f ms / %f fps\n", frametime, 1000.0 / frametime);
+    *prev = cur;
 }
 
 int main(int argc, char **argv) {
@@ -195,15 +205,14 @@ int main(int argc, char **argv) {
     puts("[+] Successfully parsed provided SDL file");
     fclose(input_fp);
     
-    bool use_opengl, nvjpeg_first_only;
+    bool use_opengl, nvjpeg_first_only, show_frametime;
     char* nvjpeg_output;
 
     // float3 cam_pos = make_float3(-4000, 400, -1500), cam_dir = make_float3(1,0,0), cam_up = make_float3(0,1,0); // PT Cruiser scene
     float3 cam_pos = make_float3(0, 0, -3), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Cornell box
     //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
 
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &cam_pos, &cam_dir, &cam_up);
-
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &cam_pos, &cam_dir, &cam_up);
     if (use_opengl) init_opengl(params.x_res, params.y_res);
     if (nvjpeg_output) {
         /* postprocessing setup */
@@ -213,25 +222,20 @@ int main(int argc, char **argv) {
     
     init_device(num_objects, meshes);
     
-    struct timespec prev, cur;
-    timespec_get(&prev, TIME_UTC);
+    struct timespec prev;
+    if (show_frametime) timespec_get(&prev, TIME_UTC);
     if (use_opengl) {
         while (!glfwWindowShouldClose(window)) {
             get_key_input(window, &cam_pos, &cam_up, &cam_dir);
             render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params);
             glfwSwapBuffers(window);
             glfwPollEvents();
-            timespec_get(&cur, TIME_UTC);
-            float frametime = (cur.tv_sec - prev.tv_sec) * 1000.0 + (cur.tv_nsec - prev.tv_nsec) / 1000000.0;
-            fprintf(stderr, "Time: %f ms / %f fps\n", frametime, 1000 / frametime);
-            prev = cur;
+            if (show_frametime) calc_frametime(&prev);
             if (nvjpeg_first_only && nvjpeg_output) nvjpeg_output = NULL; // prevent saving future frames to file
         }
     } else {
         render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params);
-        timespec_get(&cur, TIME_UTC);
-        float frametime = (cur.tv_sec - prev.tv_sec) * 1000.0 + (cur.tv_nsec - prev.tv_nsec) / 1000000.0;
-        fprintf(stderr, "Time: %f ms / %f fps\n", frametime, 1000 / frametime);
+        if (show_frametime) calc_frametime(&prev);
     }
     
     clean_device();
