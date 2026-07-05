@@ -139,13 +139,18 @@ static void clean_device(void) {
 
 static void process_float3_args(int argc, char** argv, int* i, float3* value) {
     float* value_f = &value->x;
+char* endptr;
     for (int j = 0; j < 3; j++) {
         if (*i + 1 == argc) { // i starts at option; move to first component argument
-            fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i - j - 1]);
+            fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i - j]);
             exit(EXIT_FAILURE);
         }
-        value_f[j] = atof(argv[(*i)++ + 1]);
-    }
+        value_f[j] = strtof(argv[(*i)++ + 1], &endptr);
+        if (*endptr) {
+            fprintf(stderr, "[!] Incorrectly formatted value '%s' for option '%s' (expected a float)\n", argv[*i], argv[*i - j - 1]);
+            exit(EXIT_FAILURE);
+        }
+            }
 }
 
 static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, float3* cam_pos, float3* cam_dir, float3* cam_up) {
