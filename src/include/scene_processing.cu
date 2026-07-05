@@ -235,15 +235,6 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
     initialise_materials_data(texture_paths, transparencies, crit_angles, refr_indices, smoothnesses, roughnesses, num_total_materials); // Copy material data to device and load textures
     
     // Process rendering parameters
-    *params = (RenderParameters) {
-        .x_res = X_RES,
-        .y_res = Y_RES,
-        .x_fov = X_FOV,
-        //.y_fov = Y_FOV,
-        .pixel_ray_grid_dim = PIXEL_RAY_GRID_DIM,
-        .ray_bounce_limit = RAY_BOUNCE_LIMIT,
-        .pixels_per_tile = TILE_PIXELS,
-    };
     bool valid, use_x_fov = true;
     for (int i = 0; i < parsed_scene->param_len; i++) {
         valid = true;
@@ -285,6 +276,30 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
 
     // Free parsed scene struct
     free_scene(parsed_scene);
+}
+
+void init_params(RenderParameters* params) {
+    *params = (RenderParameters) {
+        .cam_pos = CAM_POS,
+        .cam_dir = CAM_DIR,
+        .cam_up = CAM_UP,
+        .cam_speed = CAM_SPEED,
+        .x_res = X_RES,
+        .y_res = Y_RES,
+        .x_fov = X_FOV,
+        .pixel_ray_grid_dim = PIXEL_RAY_GRID_DIM,
+        .ray_bounce_limit = RAY_BOUNCE_LIMIT,
+        .pixels_per_tile = TILE_PIXELS,
+        .num_frames = NO_FRAME_LIMIT,
+        .image_quality = NVJPEG_IMAGE_QUALITY,
+        .use_opengl = false,
+        .nvjpeg_first = false,
+        .nvjpeg_last = true,
+        .show_frametime = false,
+        .use_denoising = true,
+        .use_bloom = true,
+        .nvjpeg_output = NULL,
+    };
 }
 
 void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params) {

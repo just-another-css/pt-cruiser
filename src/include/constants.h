@@ -12,16 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define X_RES 3848
-#define Y_RES 2160
-#define X_FOV 1.75
-#define PIXEL_RAY_GRID_DIM 10
-#define RAY_BOUNCE_LIMIT 16
-#define TILE_PIXELS 262144 // 2^18
-
-#define NO_FRAME_LIMIT -1
-#define NVJPEG_IMAGE_QUALITY 90
-
 #define CUDA_RAND_SEED 123456
 
 #define MALLOC_CHECK(p) do { \

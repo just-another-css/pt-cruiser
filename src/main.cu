@@ -89,20 +89,20 @@ static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, f
     else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, *cam_up));
 }
 
-static void render_frame(bool use_opengl, char* img_output, float3 cam_pos, float3 cam_up, float3 cam_dir, RenderParameters params, bool use_denoising, bool use_bloom) {
+static void render_frame(RenderParameters params, char* img_output) {
     size_t num_bytes;
-    if (use_opengl) {
+    if (params.use_opengl) {
         CUDA_CHECK(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
         CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void **) &fb.ldr_buf, &num_bytes, cuda_pbo_resource));
     }
 
-    pathtrace(cam_pos, cam_up, cam_dir, fb.hdr_buf, fb.light_mask,
+    pathtrace(params.cam_pos, params.cam_up, params.cam_dir, fb.hdr_buf, fb.light_mask,
         params.x_res, params.y_res, params.pixel_ray_grid_dim, params.pixels_per_tile, params.ray_bounce_limit, params.x_fov);
 
     /* postprocessing: denoise -> bloom -> tonemap -> gamma -> ldr_buf */
-    postprocess_run(&fb, &ds, use_denoising, use_bloom);
+    postprocess_run(&fb, &ds, params.use_denoising, params.use_bloom);
     if (img_output) postprocess_save_jpeg(&fb, &js, img_output);
-    if (use_opengl) {
+    if (params.use_opengl) {
         CUDA_CHECK(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
         glBindTexture(GL_TEXTURE_2D, textureID);
@@ -160,59 +160,50 @@ int main(int argc, char **argv) {
     int num_objects;
     PointsMesh* meshes;
     RenderParameters params;
+    init_params(&params);
     parse_file(input_fp, &num_objects, &meshes, &params);
     puts("[+] Successfully parsed provided SDL file");
     fclose(input_fp);
-    
-    bool use_opengl, nvjpeg_first, nvjpeg_last, show_frametime, use_denoising, use_bloom;
-    char* nvjpeg_output;
 
-    // float3 cam_pos = make_float3(-4000, 400, -1500), cam_dir = make_float3(1,0,0), cam_up = make_float3(0,1,0); // PT Cruiser scene
-    float3 cam_pos = make_float3(0, 0, -3), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Cornell box
-    //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
-    float cam_speed = 1;
-    int image_quality = NVJPEG_IMAGE_QUALITY;
-    int num_frames = NO_FRAME_LIMIT;
+    process_args(argc, argv, &params);
 
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first, &nvjpeg_last, &show_frametime, &use_denoising, &use_bloom, &cam_pos, &cam_dir, &cam_up, &cam_speed, &num_frames, &image_quality);
-
-    if (!use_opengl && !nvjpeg_output) {
+    if (!params.use_opengl && !params.nvjpeg_output) {
         fputs("[!] No output method provided\n", stderr);
         return EXIT_FAILURE;
     }
 
-    if (use_opengl) init_opengl(params.x_res, params.y_res);
-    if (nvjpeg_output) {
+    if (params.use_opengl) init_opengl(params.x_res, params.y_res);
+    if (params.nvjpeg_output) {
         /* postprocessing setup */
         postprocess_init(&fb, &ds, params.x_res, params.y_res);
-        postprocess_jpeg_init(&fb, &js, image_quality);
+        postprocess_jpeg_init(&fb, &js, params.image_quality);
     }
     
     init_device(num_objects, meshes);
     
     int frame_count = 0;
     struct timespec prev;
-    if (show_frametime) timespec_get(&prev, TIME_UTC);
-    if (use_opengl) {
-        char* nvjpeg_frame_output = nvjpeg_last ? NULL : nvjpeg_output; // do not save every frame if nvjpeg_last set
-        while (!glfwWindowShouldClose(window) && ++frame_count != num_frames) {
-            get_key_input(window, &cam_pos, &cam_up, &cam_dir, cam_speed);
-            render_frame(use_opengl, nvjpeg_frame_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
+    if (params.show_frametime) timespec_get(&prev, TIME_UTC);
+    if (params.use_opengl) {
+        char* nvjpeg_frame_output = params.nvjpeg_last ? NULL : params.nvjpeg_output; // do not save every frame if nvjpeg_last set
+        while (!glfwWindowShouldClose(window) && ++frame_count != params.num_frames) {
+            get_key_input(window, &params.cam_pos, &params.cam_up, &params.cam_dir, params.cam_speed);
+            render_frame(params, nvjpeg_frame_output);
             glfwSwapBuffers(window);
             glfwPollEvents();
-            if (show_frametime) calc_frametime(&prev);
-            if (nvjpeg_first && nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
+            if (params.show_frametime) calc_frametime(&prev);
+            if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
         }
-        if (nvjpeg_last) postprocess_save_jpeg(&fb, &js, nvjpeg_output);
+        if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {
         do {
-            render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
-            if (show_frametime) calc_frametime(&prev);
-        } while (++frame_count < num_frames);
+            render_frame(params, params.nvjpeg_output);
+            if (params.show_frametime) calc_frametime(&prev);
+        } while (++frame_count < params.num_frames);
     }
     
     clean_device();
-    if (use_opengl) clean_opengl();
+    if (params.use_opengl) clean_opengl();
     else postprocess_jpeg_cleanup(&fb, &js);
     return EXIT_SUCCESS;
 }
