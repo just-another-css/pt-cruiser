@@ -88,9 +88,9 @@ static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, f
     else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1, *cam_up));
 }
 
-static void render_frame(char* img_output, float3 cam_pos, float3 cam_up, float3 cam_dir, RenderParameters params) {
+static void render_frame(bool use_opengl, char* img_output, float3 cam_pos, float3 cam_up, float3 cam_dir, RenderParameters params) {
     size_t num_bytes;
-    if (!*img_output) {
+    if (use_opengl) {
         CUDA_CHECK(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
         CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void **) &fb.ldr_buf, &num_bytes, cuda_pbo_resource));
     }
@@ -100,8 +100,8 @@ static void render_frame(char* img_output, float3 cam_pos, float3 cam_up, float3
 
     /* postprocessing: denoise -> bloom -> tonemap -> gamma -> ldr_buf */
     postprocess_run(&fb, &ds);
-    if (*img_output) postprocess_save_jpeg(&fb, &js, img_output);
-    else {
+    if (img_output) postprocess_save_jpeg(&fb, &js, img_output);
+    if (use_opengl) {
         CUDA_CHECK(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
         glBindTexture(GL_TEXTURE_2D, textureID);
@@ -137,9 +137,32 @@ static void clean_device(void) {
     free_objects();
 }
 
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output) {
+    *use_opengl = false;
+    *nvjpeg_output = NULL;
+    for (int i = 2; i < argc; i++) {
+        if (*argv[i] != '-') {
+            fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
+            exit(EXIT_FAILURE);
+        }
+        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) {
+            if (++i < argc) {
+                *nvjpeg_output = argv[i];
+            } else {
+                fprintf(stderr, "[!] No output file provided with option '%s' \n", argv[i - 1]);
+                exit(EXIT_FAILURE);
+            }
+        } else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) *use_opengl = true;
+        else {
+            fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fputs("[!] SDL source file missing", stderr);
+        fputs("[!] No SDL file provided", stderr);
         fprintf(stderr, "Usage: %s <SDL source file> [<nvJPEG dest>]\n", argv[0]);
         return EXIT_FAILURE;
     }
@@ -152,14 +175,15 @@ int main(int argc, char **argv) {
     PointsMesh* meshes;
     RenderParameters params;
     parse_file(input_fp, &num_objects, &meshes, &params);
+    puts("[+] Successfully parsed provided SDL file");
     fclose(input_fp);
     
-    puts("[+] Successfully parsed!");
-    bool use_opengl = argc < 3;
-    int jpeg_index = 2;
-    if (use_opengl) {
-        init_opengl(params.x_res, params.y_res);
-    } else {
+    bool use_opengl;
+    char* nvjpeg_output;
+    process_args(argc, argv, &use_opengl, &nvjpeg_output);
+
+    if (use_opengl) init_opengl(params.x_res, params.y_res);
+    if (nvjpeg_output) {
         /* postprocessing setup */
         postprocess_init(&fb, &ds, params.x_res, params.y_res);
         postprocess_jpeg_init(&fb, &js, 90);
@@ -176,7 +200,7 @@ int main(int argc, char **argv) {
     if (use_opengl) {
         while (!glfwWindowShouldClose(window)) {
             get_key_input(window, &cam_pos, &cam_up, &cam_dir);
-            render_frame("\0", cam_pos, cam_up, cam_dir, params);
+            render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params);
             glfwSwapBuffers(window);
             glfwPollEvents();
             timespec_get(&cur, TIME_UTC);
@@ -185,7 +209,7 @@ int main(int argc, char **argv) {
             prev = cur;
         }
     } else {
-        render_frame(argv[jpeg_index], cam_pos, cam_up, cam_dir, params);
+        render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params);
         timespec_get(&cur, TIME_UTC);
         float frametime = (cur.tv_sec - prev.tv_sec) * 1000.0 + (cur.tv_nsec - prev.tv_nsec) / 1000000.0;
         fprintf(stderr, "Time: %f ms / %f fps\n", frametime, 1000 / frametime);
