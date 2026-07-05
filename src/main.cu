@@ -174,7 +174,7 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value) {
     }
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first, bool* nvjpeg_last, bool* show_frametime, bool* use_denoising, bool* use_bloom, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed, int* image_quality) {
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first, bool* nvjpeg_last, bool* show_frametime, bool* use_denoising, bool* use_bloom, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed, int* num_frames, int* image_quality) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
     *nvjpeg_first = false;
@@ -217,6 +217,7 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, cam_dir);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, cam_up);
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, cam_speed);
+        else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, num_frames);
         else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, image_quality);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
@@ -259,8 +260,9 @@ int main(int argc, char **argv) {
     //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
     float cam_speed = 1;
     int image_quality = NVJPEG_IMAGE_QUALITY;
+    int num_frames = NO_FRAME_LIMIT;
 
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first, &nvjpeg_last, &show_frametime, &use_denoising, &use_bloom, &cam_pos, &cam_dir, &cam_up, &cam_speed, &image_quality);
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first, &nvjpeg_last, &show_frametime, &use_denoising, &use_bloom, &cam_pos, &cam_dir, &cam_up, &cam_speed, &num_frames, &image_quality);
 
     if (!use_opengl && !nvjpeg_output) {
         fputs("[!] No output method provided\n", stderr);
@@ -276,11 +278,12 @@ int main(int argc, char **argv) {
     
     init_device(num_objects, meshes);
     
+    int frame_count = 0;
     struct timespec prev;
     if (show_frametime) timespec_get(&prev, TIME_UTC);
     if (use_opengl) {
         char* nvjpeg_frame_output = nvjpeg_last ? NULL : nvjpeg_output; // do not save every frame if nvjpeg_last set
-        while (!glfwWindowShouldClose(window)) {
+        while (!glfwWindowShouldClose(window) && ++frame_count != num_frames) {
             get_key_input(window, &cam_pos, &cam_up, &cam_dir, cam_speed);
             render_frame(use_opengl, nvjpeg_frame_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
             glfwSwapBuffers(window);
@@ -290,8 +293,10 @@ int main(int argc, char **argv) {
         }
         if (nvjpeg_last) postprocess_save_jpeg(&fb, &js, nvjpeg_output);
     } else {
-        render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
-        if (show_frametime) calc_frametime(&prev);
+        do {
+            render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
+            if (show_frametime) calc_frametime(&prev);
+        } while (++frame_count < num_frames);
     }
     
     clean_device();
