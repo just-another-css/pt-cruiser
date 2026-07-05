@@ -17,7 +17,7 @@ static void process_int_arg(int argc, char** argv, int* i, int* value, int min_v
     }
 }
 
-static void process_float_arg(int argc, char** argv, int* i, float* value) {
+static void process_float_arg(int argc, char** argv, int* i, float* value, float min_value, float max_value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
         fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i]);
         exit(EXIT_FAILURE);
@@ -26,6 +26,10 @@ static void process_float_arg(int argc, char** argv, int* i, float* value) {
     *value = strtof(argv[(*i)++ + 1], &endptr);
     if (*endptr) {
         fprintf(stderr, "[!] Incorrectly formatted value '%s' for option '%s' (expected a float)\n", argv[*i], argv[*i - 1]);
+        exit(EXIT_FAILURE);
+    }
+    if (*value < min_value || *value > max_value) {
+        fprintf(stderr, "[!] Value %f ('%s') for option '%s' is not within permitted range [%f, %f]\n", *value, argv[*i], argv[*i - 1], min_value, max_value);
         exit(EXIT_FAILURE);
     }
 }
@@ -82,7 +86,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, &params->cam_pos, false);
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, true);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true);
-        else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed);
+        else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, &params->num_frames, 0, INT_MAX);
         else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, &params->image_quality, 0, 100);
         else {
