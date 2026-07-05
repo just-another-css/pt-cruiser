@@ -1,5 +1,8 @@
 #include "arg_processing.h"
 
+#define MIN_FOV FLT_MIN
+#define MAX_FOV M_PI
+
 static void process_int_arg(int argc, char** argv, int* i, int* value, int min_value, int max_value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
         fprintf(stderr, "[!] No value provided for option '%s'\n", argv[*i]);
@@ -117,7 +120,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "xf") || !strcmp(argv[i] + 1, "-x-fov")) {
             if (!y_fov_set) {
-                process_float_arg(argc, argv, &i, &params->x_fov, FLT_MIN, M_PI);
+                process_float_arg(argc, argv, &i, &params->x_fov, MIN_FOV, MAX_FOV);
                 x_fov_set = true;
             } else {
                 fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -yf/--y-fov\n", argv[i]);
@@ -126,7 +129,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         }
         else if (!strcmp(argv[i] + 1, "yf") || !strcmp(argv[i] + 1, "-y-fov")) {
             if (!x_fov_set) {
-                process_float_arg(argc, argv, &i, &params->y_fov, FLT_MIN, M_PI);
+                process_float_arg(argc, argv, &i, &params->y_fov, MIN_FOV, MAX_FOV);
                 y_fov_set = true;
             } else {
                 fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -xf/--x-fov\n", argv[i]);
@@ -145,6 +148,18 @@ void process_args(int argc, char** argv, RenderParameters* params) {
             exit(EXIT_FAILURE);
         }
     }
-    if (x_fov_set) params->y_fov = params->x_fov * params->y_res / params->x_res;
-    else if (y_fov_set) params->x_fov = params->y_fov * params->x_res / params->y_res;
+    if (x_fov_set) {
+        params->y_fov = params->x_fov * params->y_res / params->x_res;
+        if (params->y_fov < MIN_FOV || params->y_fov > MAX_FOV) {
+            fprintf(stderr, "[!] Y FOV %f is not within permitted range [%f, %f] due to provided resolution and X FOV\n", params->y_fov, MIN_FOV, MAX_FOV);
+            exit(EXIT_FAILURE);
+        }
+    }
+    else if (y_fov_set) {
+        params->x_fov = params->y_fov * params->x_res / params->y_res;
+        if (params->x_fov < MIN_FOV || params->x_fov > MAX_FOV) {
+            fprintf(stderr, "[!] X FOV %f is not within permitted range [%f, %f] due to provided resolution and Y FOV\n", params->x_fov, MIN_FOV, MAX_FOV);
+            exit(EXIT_FAILURE);
+        }
+    }
 }
