@@ -213,6 +213,12 @@ int main(int argc, char **argv) {
     //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
 
     process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &cam_pos, &cam_dir, &cam_up);
+
+    if (!use_opengl && !nvjpeg_output) {
+        fputs("[!] No output method provided\n", stderr);
+        return EXIT_FAILURE;
+    }
+
     if (use_opengl) init_opengl(params.x_res, params.y_res);
     if (nvjpeg_output) {
         /* postprocessing setup */
