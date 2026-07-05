@@ -57,6 +57,7 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
 
 void process_args(int argc, char** argv, RenderParameters* params) {
     bool first_image_set = false, last_image_set = false, every_image_set = false;
+    bool x_fov_set = false, y_fov_set = false;
     for (int i = 2; i < argc; i++) {
         if (*argv[i] != '-') {
             fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
@@ -114,11 +115,36 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, true, true);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true, true);
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
+        else if (!strcmp(argv[i] + 1, "xf") || !strcmp(argv[i] + 1, "-x-fov")) {
+            if (!y_fov_set) {
+                process_float_arg(argc, argv, &i, &params->x_fov, FLT_MIN, M_PI);
+                x_fov_set = true;
+            } else {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -yf/--y-fov\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+        }
+        else if (!strcmp(argv[i] + 1, "yf") || !strcmp(argv[i] + 1, "-y-fov")) {
+            if (!x_fov_set) {
+                process_float_arg(argc, argv, &i, &params->y_fov, FLT_MIN, M_PI);
+                y_fov_set = true;
+            } else {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -xf/--x-fov\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+        }
         else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, &params->num_frames, 0, INT_MAX);
         else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, &params->image_quality, 0, 100);
+        else if (!strcmp(argv[i] + 1, "xr") || !strcmp(argv[i] + 1, "-x-resolution")) process_int_arg(argc, argv, &i, &params->x_res, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "yr") || !strcmp(argv[i] + 1, "-y-resolution")) process_int_arg(argc, argv, &i, &params->y_res, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "prgd") || !strcmp(argv[i] + 1, "-pixel-ray-grid-dim")) process_int_arg(argc, argv, &i, &params->pixel_ray_grid_dim, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "rbl") || !strcmp(argv[i] + 1, "-ray-bounce-limit")) process_int_arg(argc, argv, &i, &params->ray_bounce_limit, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "ppt") || !strcmp(argv[i] + 1, "-pixels-per-tile")) process_int_arg(argc, argv, &i, &params->pixels_per_tile, 1, INT_MAX);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
         }
     }
+    if (x_fov_set) params->y_fov = params->x_fov * params->y_res / params->x_res;
+    else if (y_fov_set) params->x_fov = params->y_fov * params->x_res / params->y_res;
 }
