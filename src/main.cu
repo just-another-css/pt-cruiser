@@ -137,9 +137,10 @@ static void clean_device(void) {
     free_objects();
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output) {
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
+    *nvjpeg_first_only = false;
     for (int i = 2; i < argc; i++) {
         if (*argv[i] != '-') {
             fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
@@ -152,7 +153,9 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
                 fprintf(stderr, "[!] No output file provided with option '%s' \n", argv[i - 1]);
                 exit(EXIT_FAILURE);
             }
-        } else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) *use_opengl = true;
+        }
+        else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) *use_opengl = true;
+        else if (!strcmp(argv[i] + 1, "fio") || !strcmp(argv[i] + 1, "-first-image-only")) *nvjpeg_first_only = true;
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
@@ -178,9 +181,9 @@ int main(int argc, char **argv) {
     puts("[+] Successfully parsed provided SDL file");
     fclose(input_fp);
     
-    bool use_opengl;
+    bool use_opengl, nvjpeg_first_only;
     char* nvjpeg_output;
-    process_args(argc, argv, &use_opengl, &nvjpeg_output);
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only);
 
     if (use_opengl) init_opengl(params.x_res, params.y_res);
     if (nvjpeg_output) {
@@ -207,6 +210,7 @@ int main(int argc, char **argv) {
             float frametime = (cur.tv_sec - prev.tv_sec) * 1000.0 + (cur.tv_nsec - prev.tv_nsec) / 1000000.0;
             fprintf(stderr, "Time: %f ms / %f fps\n", frametime, 1000 / frametime);
             prev = cur;
+            if (nvjpeg_first_only && nvjpeg_output) nvjpeg_output = NULL; // prevent saving future frames to file
         }
     } else {
         render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params);
