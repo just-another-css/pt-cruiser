@@ -19,6 +19,8 @@
 #define RAY_BOUNCE_LIMIT 16
 #define TILE_PIXELS 262144 // 2^18
 
+#define NVJPEG_IMAGE_QUALITY 90
+
 #define CUDA_RAND_SEED 123456
 
 #define MALLOC_CHECK(p) do { \

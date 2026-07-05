@@ -137,6 +137,19 @@ static void clean_device(void) {
     free_objects();
 }
 
+static void process_int_arg(int argc, char** argv, int* i, int* value) {
+    if (*i + 1 == argc) { // i starts at option; move to first component argument
+        fprintf(stderr, "[!] No value provided for option '%s'\n", argv[*i]);
+        exit(EXIT_FAILURE);
+    }
+    char* endptr;
+    *value = strtol(argv[(*i)++ + 1], &endptr, 10);
+    if (*endptr) {
+        fprintf(stderr, "[!] Incorrectly formatted value '%s' for option '%s' (expected an int)\n", argv[*i], argv[*i - 1]);
+        exit(EXIT_FAILURE);
+    }
+}
+
 static void process_float_arg(int argc, char** argv, int* i, float* value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
         fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i]);
@@ -161,7 +174,7 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value) {
     }
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed) {
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed, int* image_quality) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
     *nvjpeg_first_only = false;
@@ -186,6 +199,7 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, cam_dir);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, cam_up);
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, cam_speed);
+        else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, image_quality);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
@@ -226,8 +240,9 @@ int main(int argc, char **argv) {
     float3 cam_pos = make_float3(0, 0, -3), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Cornell box
     //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
     float cam_speed = 1;
+    int image_quality = NVJPEG_IMAGE_QUALITY;
 
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &cam_pos, &cam_dir, &cam_up, &cam_speed);
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &cam_pos, &cam_dir, &cam_up, &cam_speed, &image_quality);
 
     if (!use_opengl && !nvjpeg_output) {
         fputs("[!] No output method provided\n", stderr);
@@ -238,7 +253,7 @@ int main(int argc, char **argv) {
     if (nvjpeg_output) {
         /* postprocessing setup */
         postprocess_init(&fb, &ds, params.x_res, params.y_res);
-        postprocess_jpeg_init(&fb, &js, 90);
+        postprocess_jpeg_init(&fb, &js, image_quality);
     }
     
     init_device(num_objects, meshes);
