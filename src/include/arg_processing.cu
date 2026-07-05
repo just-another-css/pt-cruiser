@@ -1,6 +1,6 @@
 #include "arg_processing.h"
 
-static void process_int_arg(int argc, char** argv, int* i, int* value) {
+static void process_int_arg(int argc, char** argv, int* i, int* value, int min_value, int max_value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
         fprintf(stderr, "[!] No value provided for option '%s'\n", argv[*i]);
         exit(EXIT_FAILURE);
@@ -9,6 +9,10 @@ static void process_int_arg(int argc, char** argv, int* i, int* value) {
     *value = strtol(argv[(*i)++ + 1], &endptr, 10);
     if (*endptr) {
         fprintf(stderr, "[!] Incorrectly formatted value '%s' for option '%s' (expected an int)\n", argv[*i], argv[*i - 1]);
+        exit(EXIT_FAILURE);
+    }
+    if (*value < min_value || *value > max_value) {
+        fprintf(stderr, "[!] Value %d ('%s') for option '%s' is not within permitted range [%d, %d]\n", *value, argv[*i], argv[*i - 1], min_value, max_value);
         exit(EXIT_FAILURE);
     }
 }
@@ -79,8 +83,8 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, true);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true);
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed);
-        else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, &params->num_frames);
-        else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, &params->image_quality);
+        else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, &params->num_frames, 0, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, &params->image_quality, 0, 100);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
