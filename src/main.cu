@@ -174,10 +174,11 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value) {
     }
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, bool* use_denoising, bool* use_bloom, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed, int* image_quality) {
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first, bool* nvjpeg_last, bool* show_frametime, bool* use_denoising, bool* use_bloom, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed, int* image_quality) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
-    *nvjpeg_first_only = false;
+    *nvjpeg_first = false;
+    *nvjpeg_last = false;
     *show_frametime = false;
     *use_denoising = true;
     *use_bloom = true;
@@ -195,7 +196,20 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
             }
         }
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) *use_opengl = true;
-        else if (!strcmp(argv[i] + 1, "fio") || !strcmp(argv[i] + 1, "-first-image-only")) *nvjpeg_first_only = true;
+        else if (!strcmp(argv[i] + 1, "fi") || !strcmp(argv[i] + 1, "-first-image")) {
+            if (!*nvjpeg_last) *nvjpeg_first = true;
+            else {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -li/--last-image\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+        }
+        else if (!strcmp(argv[i] + 1, "li") || !strcmp(argv[i] + 1, "-last-image")) {
+            if (!*nvjpeg_first) *nvjpeg_last = true;
+            else {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -fi/--first-image\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+        }
         else if (!strcmp(argv[i] + 1, "ft") || !strcmp(argv[i] + 1, "-show-frametime")) *show_frametime = true;
         else if (!strcmp(argv[i] + 1, "nd") || !strcmp(argv[i] + 1, "-no-denoising")) *use_denoising = false;
         else if (!strcmp(argv[i] + 1, "nb") || !strcmp(argv[i] + 1, "-no-bloom")) *use_bloom = false;
@@ -237,7 +251,7 @@ int main(int argc, char **argv) {
     puts("[+] Successfully parsed provided SDL file");
     fclose(input_fp);
     
-    bool use_opengl, nvjpeg_first_only, show_frametime, use_denoising, use_bloom;
+    bool use_opengl, nvjpeg_first, nvjpeg_last, show_frametime, use_denoising, use_bloom;
     char* nvjpeg_output;
 
     // float3 cam_pos = make_float3(-4000, 400, -1500), cam_dir = make_float3(1,0,0), cam_up = make_float3(0,1,0); // PT Cruiser scene
@@ -246,7 +260,7 @@ int main(int argc, char **argv) {
     float cam_speed = 1;
     int image_quality = NVJPEG_IMAGE_QUALITY;
 
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &use_denoising, &use_bloom, &cam_pos, &cam_dir, &cam_up, &cam_speed, &image_quality);
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first, &nvjpeg_last, &show_frametime, &use_denoising, &use_bloom, &cam_pos, &cam_dir, &cam_up, &cam_speed, &image_quality);
 
     if (!use_opengl && !nvjpeg_output) {
         fputs("[!] No output method provided\n", stderr);
@@ -265,14 +279,16 @@ int main(int argc, char **argv) {
     struct timespec prev;
     if (show_frametime) timespec_get(&prev, TIME_UTC);
     if (use_opengl) {
+        char* nvjpeg_frame_output = nvjpeg_last ? NULL : nvjpeg_output; // do not save every frame if nvjpeg_last set
         while (!glfwWindowShouldClose(window)) {
             get_key_input(window, &cam_pos, &cam_up, &cam_dir, cam_speed);
-            render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
+            render_frame(use_opengl, nvjpeg_frame_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
             glfwSwapBuffers(window);
             glfwPollEvents();
             if (show_frametime) calc_frametime(&prev);
-            if (nvjpeg_first_only && nvjpeg_output) nvjpeg_output = NULL; // prevent saving future frames to file
+            if (nvjpeg_first && nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
         }
+        if (nvjpeg_last) postprocess_save_jpeg(&fb, &js, nvjpeg_output);
     } else {
         render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params, use_denoising, use_bloom);
         if (show_frametime) calc_frametime(&prev);
