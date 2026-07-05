@@ -79,13 +79,13 @@ static void init_device(int num_objects, PointsMesh* meshes) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, float3* cam_dir) {
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) add_vec_ip(cam_pos, *cam_dir);
-    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1, *cam_dir));
-    else if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) add_vec_ip(cam_pos, vec_cross_prod(*cam_up, *cam_dir));
-    else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1, vec_cross_prod(*cam_up, *cam_dir)));
-    else if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) add_vec_ip(cam_pos, *cam_up);
-    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1, *cam_up));
+static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, float3* cam_dir, float cam_speed) {
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, *cam_dir));
+    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, *cam_dir));
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, vec_cross_prod(*cam_up, *cam_dir)));
+    else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, vec_cross_prod(*cam_up, *cam_dir)));
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, *cam_up));
+    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, *cam_up));
 }
 
 static void render_frame(bool use_opengl, char* img_output, float3 cam_pos, float3 cam_up, float3 cam_dir, RenderParameters params) {
@@ -137,9 +137,17 @@ static void clean_device(void) {
     free_objects();
 }
 
+static void process_float_arg(int argc, char** argv, int* i, float* value) {
+    if (*i + 1 == argc) { // i starts at option; move to first component argument
+        fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i]);
+        exit(EXIT_FAILURE);
+    }
+    *value = atof(argv[(*i)++ + 1]);
+}
+
 static void process_float3_args(int argc, char** argv, int* i, float3* value) {
     float* value_f = &value->x;
-char* endptr;
+    char* endptr;
     for (int j = 0; j < 3; j++) {
         if (*i + 1 == argc) { // i starts at option; move to first component argument
             fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i - j]);
@@ -150,10 +158,10 @@ char* endptr;
             fprintf(stderr, "[!] Incorrectly formatted value '%s' for option '%s' (expected a float)\n", argv[*i], argv[*i - j - 1]);
             exit(EXIT_FAILURE);
         }
-            }
+    }
 }
 
-static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, float3* cam_pos, float3* cam_dir, float3* cam_up) {
+static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_output, bool* nvjpeg_first_only, bool* show_frametime, float3* cam_pos, float3* cam_dir, float3* cam_up, float* cam_speed) {
     *use_opengl = false;
     *nvjpeg_output = NULL;
     *nvjpeg_first_only = false;
@@ -177,6 +185,7 @@ static void process_args(int argc, char** argv, bool* use_opengl, char** nvjpeg_
         else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, cam_pos);
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, cam_dir);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, cam_up);
+        else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, cam_speed);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
@@ -216,8 +225,9 @@ int main(int argc, char **argv) {
     // float3 cam_pos = make_float3(-4000, 400, -1500), cam_dir = make_float3(1,0,0), cam_up = make_float3(0,1,0); // PT Cruiser scene
     float3 cam_pos = make_float3(0, 0, -3), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Cornell box
     //float3 cam_pos = make_float3(0, 0, 0), cam_dir = make_float3(0,0,1), cam_up = make_float3(0,1,0); // Default
+    float cam_speed = 1;
 
-    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &cam_pos, &cam_dir, &cam_up);
+    process_args(argc, argv, &use_opengl, &nvjpeg_output, &nvjpeg_first_only, &show_frametime, &cam_pos, &cam_dir, &cam_up, &cam_speed);
 
     if (!use_opengl && !nvjpeg_output) {
         fputs("[!] No output method provided\n", stderr);
@@ -237,7 +247,7 @@ int main(int argc, char **argv) {
     if (show_frametime) timespec_get(&prev, TIME_UTC);
     if (use_opengl) {
         while (!glfwWindowShouldClose(window)) {
-            get_key_input(window, &cam_pos, &cam_up, &cam_dir);
+            get_key_input(window, &cam_pos, &cam_up, &cam_dir, cam_speed);
             render_frame(use_opengl, nvjpeg_output, cam_pos, cam_up, cam_dir, params);
             glfwSwapBuffers(window);
             glfwPollEvents();
