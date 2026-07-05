@@ -52,7 +52,7 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
         fprintf(stderr, "[!] Value for option '%s' must be nonzero\n", argv[*i - 3]);
         exit(EXIT_FAILURE);
     }
-    norm_vec_ip(value);
+    if (normalise) norm_vec_ip(value);
 }
 
 void process_args(int argc, char** argv, RenderParameters* params) {
