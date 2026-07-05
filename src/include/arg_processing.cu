@@ -56,7 +56,7 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
 }
 
 void process_args(int argc, char** argv, RenderParameters* params) {
-    bool first_image_set = false, last_image_set = false;
+    bool first_image_set = false, last_image_set = false, every_image_set = false;
     for (int i = 2; i < argc; i++) {
         if (*argv[i] != '-') {
             fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
@@ -72,24 +72,38 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         }
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) params->use_opengl = true;
         else if (!strcmp(argv[i] + 1, "fi") || !strcmp(argv[i] + 1, "-first-image")) {
-            if (!last_image_set) {
+            if (!last_image_set && !every_image_set) {
                 params->nvjpeg_first = true;
                 first_image_set = true;
                 if (params->nvjpeg_last) params->nvjpeg_last = false;
+                if (params->nvjpeg_every) params->nvjpeg_every = false;
             }
             else {
-                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -li/--last-image\n", argv[i]);
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -li/--last-image & -ei/--every-image\n", argv[i]);
                 exit(EXIT_FAILURE);
             }
         }
         else if (!strcmp(argv[i] + 1, "li") || !strcmp(argv[i] + 1, "-last-image")) {
-            if (!first_image_set) {
+            if (!first_image_set && !every_image_set) {
                 params->nvjpeg_last = true;
                 last_image_set = true;
                 if (params->nvjpeg_first) params->nvjpeg_first = false;
+                if (params->nvjpeg_every) params->nvjpeg_every = false;
             }
             else {
-                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -fi/--first-image\n", argv[i]);
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -fi/--first-image & -ei/--every-image\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+        }
+        else if (!strcmp(argv[i] + 1, "ei") || !strcmp(argv[i] + 1, "-every-image")) {
+            if (!first_image_set && !last_image_set) {
+                params->nvjpeg_every = true;
+                every_image_set = true;
+                if (params->nvjpeg_first) params->nvjpeg_first = false;
+                if (params->nvjpeg_last) params->nvjpeg_last = false;
+            }
+            else {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with options -fi/--first-image & -li/--last-image\n", argv[i]);
                 exit(EXIT_FAILURE);
             }
         }

@@ -25,7 +25,7 @@ typedef struct {
     float x_fov, y_fov;
     int pixel_ray_grid_dim, ray_bounce_limit, pixels_per_tile;
     int num_frames, image_quality;
-    bool use_opengl, nvjpeg_first, nvjpeg_last, show_frametime, use_denoising, use_bloom;
+    bool use_opengl, nvjpeg_first, nvjpeg_last, nvjpeg_every, show_frametime, use_denoising, use_bloom;
     char* nvjpeg_output;
 } RenderParameters;
 
