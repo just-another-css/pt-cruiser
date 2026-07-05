@@ -34,6 +34,7 @@ add_custom_command(
 )
 add_library(utils STATIC
     include/api_wrapper/thrust_wrapper.cu
+    include/arg_processing.cu
     include/bound_box.cu
     include/mesh.cu
     include/objects.cu
