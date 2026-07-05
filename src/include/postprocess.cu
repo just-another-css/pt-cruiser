@@ -242,8 +242,9 @@ void postprocess_tonemap_gamma(FrameBuffers *fb) {
     CUDA_CHECK(cudaDeviceSynchronize());
 }
 
-void postprocess_run(FrameBuffers *fb, DenoiserState *ds, bool use_bloom) {
-    postprocess_denoise(fb, ds);
+void postprocess_run(FrameBuffers *fb, DenoiserState *ds, bool use_denoising, bool use_bloom) {
+    if (use_denoising) postprocess_denoise(fb, ds);
+    else CUDA_CHECK(cudaMemcpy(fb->hdr_denoised, fb->hdr_buf, fb->width * fb->height * sizeof(float3), cudaMemcpyDeviceToDevice));
     if (use_bloom) postprocess_bloom(fb);
     else CUDA_CHECK(cudaMemset(fb->bloom_tmp, 0, fb->width * fb->height * sizeof(float3))); // zero input array before tonemapping
     postprocess_tonemap_gamma(fb);
