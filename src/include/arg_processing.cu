@@ -93,6 +93,7 @@ void process_help_arg(int argc, char** argv) {
                    "                                    window and continue rendering until the     \n"
                    "                                    window is closed or a provided frame cap is \n"
                    "                                    reached\n"
+                   "    -ri <file>                      Equivalent to '-r -i <file>'\n"
                    "    -nf,   --num-frames <int>       Set a cap on the number of frames rendered\n"
                    "    -ft,   --show-frametime         Print the frametime and FPS for every frame\n"
                    "    -nb,   --no-bloom               Disable bloom postprocessing\n"
@@ -125,6 +126,10 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         }
         if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, true);
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) params->use_opengl = true;
+        else if (!strcmp(argv[i] + 1, "ri")) {
+            params->use_opengl = true;
+            process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, true);
+        }
         else if (!strcmp(argv[i] + 1, "fi") || !strcmp(argv[i] + 1, "-first-image")) {
             if (!last_image_set && !every_image_set) {
                 params->nvjpeg_first = true;
