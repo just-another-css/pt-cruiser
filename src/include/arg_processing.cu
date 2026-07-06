@@ -102,6 +102,7 @@ void process_help_arg(int argc, char** argv) {
                    "    -dir,  --camera-direction <x> <y> <z> Set initial camera direction vector\n"
                    "    -up,   --camera-up <x> <y> <z>        Set initial camera up vector\n"
                    "    -spd,  --camera-speed <float>   Set camera movement speed\n"
+                   "    -rspd, --camera-rot-speed <float>     Set camera rotation speed\n"
                    "    -xf,   --x-fov <float>          Set x/horizontal field of view\n"
                    "    -yf,   --y-fov <float>          Set y/vertical field of view\n"
                    "    -xr,   --x-resolution <int>     Set x/horizontal resolution\n"
@@ -173,6 +174,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, true, true);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true, true);
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
+        else if (!strcmp(argv[i] + 1, "rspd") || !strcmp(argv[i] + 1, "-camera-rot-speed")) process_float_arg(argc, argv, &i, &params->cam_rotation_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "xf") || !strcmp(argv[i] + 1, "-x-fov")) {
             if (!y_fov_set) {
                 process_float_arg(argc, argv, &i, &params->x_fov, MIN_FOV, MAX_FOV);

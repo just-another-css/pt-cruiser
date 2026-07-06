@@ -63,7 +63,7 @@ __host__ __device__ static __forceinline__ void add_vec_ip(float3* vec1, float3 
     vec1->z = vec1->z + vec2.z;
 }
 
-__device__ static __forceinline__ float3 add3_vec(float3 vec1, float3 vec2, float3 vec3) {
+__host__ __device__ static __forceinline__ float3 add3_vec(float3 vec1, float3 vec2, float3 vec3) {
     return make_float3(vec1.x + vec2.x + vec3.x,
                        vec1.y + vec2.y + vec3.y,
                        vec1.z + vec2.z + vec3.z);
@@ -95,7 +95,7 @@ __host__ __device__ static __forceinline__ void norm_vec_ip(float3* vec) {
     scale_vec_ip(rsqrtf(vec_dot_sqr(*vec)), vec);
 }
 
-__device__ static __forceinline__ float vec_dot_prod(float3 vec1, float3 vec2) {
+__host__ __device__ static __forceinline__ float vec_dot_prod(float3 vec1, float3 vec2) {
     return vec1.x * vec2.x +
            vec1.y * vec2.y +
            vec1.z * vec2.z;
@@ -132,6 +132,19 @@ __device__ static __forceinline__ bool zero_vec(float3 vec) {
 
 __host__ __device__ static __forceinline__ bool nonzero_vec(float3 vec) {
     return vec.x || vec.y || vec.z;
+}
+
+__host__ static __forceinline__ float3 vec_rotate(float3 vec, float3 axis, float angle) {
+    float cos_angle = cosf(angle);
+    return add3_vec(
+        scale_vec(cos_angle, vec),
+        scale_vec(sinf(angle), vec_cross_prod(axis, vec)),
+        scale_vec((1 - cos_angle) * vec_dot_prod(axis, vec), axis)
+    );
+}
+
+__host__ static __forceinline__ void vec_rotate_ip(float3* vec, float3 axis, float angle) {
+    *vec = vec_rotate(*vec, axis, angle);
 }
 
 __device__ static __forceinline__ uint64_t lshift_each_bit_3(uint64_t num) {

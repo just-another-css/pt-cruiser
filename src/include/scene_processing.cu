@@ -284,6 +284,7 @@ void init_params(RenderParameters* params) {
         .cam_dir = CAM_DIR,
         .cam_up = CAM_UP,
         .cam_speed = CAM_SPEED,
+        .cam_rotation_speed = CAM_ROTATION_SPEED,
         .x_res = X_RES,
         .y_res = Y_RES,
         .x_fov = X_FOV,

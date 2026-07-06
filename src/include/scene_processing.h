@@ -7,6 +7,7 @@
 #define CAM_DIR make_float3(0,0,1)
 #define CAM_UP  make_float3(0,1,0)
 #define CAM_SPEED 1
+#define CAM_ROTATION_SPEED 0.1
 
 #define X_RES 3848
 #define Y_RES 2160
@@ -20,7 +21,7 @@
 
 typedef struct {
     float3 cam_pos, cam_dir, cam_up;
-    float cam_speed;
+    float cam_speed, cam_rotation_speed;
     int x_res, y_res;
     float x_fov, y_fov;
     int pixel_ray_grid_dim, ray_bounce_limit, pixels_per_tile;

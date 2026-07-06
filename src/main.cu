@@ -80,13 +80,43 @@ static void init_device(int num_objects, PointsMesh* meshes) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, float3* cam_dir, float cam_speed) {
+static void get_key_input(GLFWwindow* window, float3* cam_pos, float3* cam_up, float3* cam_dir, float cam_speed, float cam_rotation_speed) {
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, *cam_dir));
-    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, *cam_dir));
+    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-cam_speed, *cam_dir));
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, vec_cross_prod(*cam_up, *cam_dir)));
-    else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, vec_cross_prod(*cam_up, *cam_dir)));
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, *cam_up));
-    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-1 * cam_speed, *cam_up));
+    else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-cam_speed, vec_cross_prod(*cam_up, *cam_dir)));
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(cam_speed, *cam_up));
+    else if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) add_vec_ip(cam_pos, scale_vec(-cam_speed, *cam_up));
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+        vec_rotate_ip(cam_up, *cam_dir, -cam_rotation_speed);
+        norm_vec_ip(cam_up);
+    }
+    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+        vec_rotate_ip(cam_up, *cam_dir, cam_rotation_speed);
+        norm_vec_ip(cam_up);
+    }
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+        vec_rotate_ip(cam_dir, *cam_up, -cam_rotation_speed);
+        norm_vec_ip(cam_dir);
+    }
+    else if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+        vec_rotate_ip(cam_dir, *cam_up, cam_rotation_speed);
+        norm_vec_ip(cam_dir);
+    }
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+        float3 cam_right = vec_cross_prod(*cam_dir, *cam_up);
+        vec_rotate_ip(cam_dir, cam_right, cam_rotation_speed);
+        norm_vec_ip(cam_dir);
+        vec_rotate_ip(cam_up, cam_right, cam_rotation_speed);
+        norm_vec_ip(cam_up);
+    }
+    else if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+        float3 cam_right = vec_cross_prod(*cam_dir, *cam_up);
+        vec_rotate_ip(cam_dir, cam_right, -cam_rotation_speed);
+        norm_vec_ip(cam_dir);
+        vec_rotate_ip(cam_up, cam_right, -cam_rotation_speed);
+        norm_vec_ip(cam_up);
+    }
 }
 
 static void render_frame(RenderParameters params, char* img_output) {
@@ -188,7 +218,7 @@ int main(int argc, char **argv) {
     if (params.use_opengl) {
         char* nvjpeg_frame_output = params.nvjpeg_last ? NULL : params.nvjpeg_output; // do not save every frame if nvjpeg_last set
         while (!glfwWindowShouldClose(window) && ++frame_count != params.num_frames) {
-            get_key_input(window, &params.cam_pos, &params.cam_up, &params.cam_dir, params.cam_speed);
+            get_key_input(window, &params.cam_pos, &params.cam_up, &params.cam_dir, params.cam_speed, params.cam_rotation_speed);
             render_frame(params, nvjpeg_frame_output);
             glfwSwapBuffers(window);
             glfwPollEvents();
