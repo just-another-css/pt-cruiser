@@ -58,6 +58,47 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
     if (normalise) norm_vec_ip(value);
 }
 
+void process_help_arg(int argc, char** argv) {
+    for (int i = 1; i < argc; i++) {
+        if (*argv[i] == '-' && (!strcmp(argv[i] + 1, "h") || !strcmp(argv[i] + 1, "-help"))) {
+            printf("Path Tracing CUDA Renderer with User Interface and Syntactic Entity\nRepresentation (PT CRUISER)\n\n"
+                   "Usage: %s <sdl_input> [options]\n"
+                   "  Arguments:\n"
+                   "    <sdl_input>                     SDL (.sdl) file defining a scene\n"
+                   "  Options:                                                                      \n"
+                   "    -h,    --help                   Print usage information and exit\n"
+                   "    -i,    --image <file>           Provide a path to a JPEG (.jpg/.jpeg) image \n"
+                   "                                    file to save rendered frames to\n"
+                   "    -iq,   --image-quality <int>    Set image quality [0-100] (default: 90)\n"
+                   "    -fi,   --first-image            Save first frame to image file\n"
+                   "    -li,   --last-image             Save last frame to image file (default)\n"
+                   "    -ei,   --every-image            Save every frame to image file\n"
+                   "    -r,    --realtime               Display rendered frames in an interactive   \n"
+                   "                                    window and continue rendering until the     \n"
+                   "                                    window is closed or a provided frame cap is \n"
+                   "                                    reached\n"
+                   "    -nf,   --num-frames <int>       Set a cap on the number of frames rendered\n"
+                   "    -ft,   --show-frametime         Print the frametime and FPS for every frame\n"
+                   "    -nb,   --no-bloom               Disable bloom postprocessing\n"
+                   "    -nd,   --no-denoising           Disable denoising postprocessing\n"
+                   "    -cam,  --camera-position <x> <y> <z>  Set initial camera position\n"
+                   "    -dir,  --camera-direction <x> <y> <z> Set initial camera direction vector\n"
+                   "    -up,   --camera-up <x> <y> <z>        Set initial camera up vector\n"
+                   "    -spd,  --camera-speed <float>   Set camera movement speed\n"
+                   "    -xf,   --x-fov <float>          Set x/horizontal field of view\n"
+                   "    -yf,   --y-fov <float>          Set y/vertical field of view\n"
+                   "    -xr,   --x-resolution <int>     Set x/horizontal resolution\n"
+                   "    -yr,   --y-resolution <int>     Set y/vertical resolution\n"
+                   "    -prgd, --pixel-ray-grid-dim <int>     Set dimension of pixel ray grids\n"
+                   "    -rbl,  --ray-bounce-limit <int> Set pathtracing ray bounce limit\n"
+                   "    -ppt,  --pixels-per-tile <int>  Set number of pixels in each rendering tile\n"
+                   "\n", argv[0]
+            );
+            exit(EXIT_SUCCESS);
+        }
+    }
+}
+
 void process_args(int argc, char** argv, RenderParameters* params) {
     bool first_image_set = false, last_image_set = false, every_image_set = false;
     bool x_fov_set = false, y_fov_set = false;
@@ -112,8 +153,8 @@ void process_args(int argc, char** argv, RenderParameters* params) {
             }
         }
         else if (!strcmp(argv[i] + 1, "ft") || !strcmp(argv[i] + 1, "-show-frametime")) params->show_frametime = true;
-        else if (!strcmp(argv[i] + 1, "nd") || !strcmp(argv[i] + 1, "-no-denoising")) params->use_denoising = false;
         else if (!strcmp(argv[i] + 1, "nb") || !strcmp(argv[i] + 1, "-no-bloom")) params->use_bloom = false;
+        else if (!strcmp(argv[i] + 1, "nd") || !strcmp(argv[i] + 1, "-no-denoising")) params->use_denoising = false;
         else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, &params->cam_pos, false, false);
         else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, true, true);
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true, true);

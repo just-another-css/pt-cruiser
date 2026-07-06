@@ -148,10 +148,11 @@ static void calc_frametime(struct timespec* prev) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fputs("[!] No SDL file provided", stderr);
-        fprintf(stderr, "Usage: %s <SDL source file> [<nvJPEG dest>]\n", argv[0]);
+        fputs("[!] No SDL file provided\n", stderr);
         return EXIT_FAILURE;
     }
+    process_help_arg(argc, argv);
+    
     FILE *input_fp = fopen(argv[1], "r");
     if (!input_fp) {
         fprintf(stderr, "[!] Error: Cannot open file %s\n", argv[1]);

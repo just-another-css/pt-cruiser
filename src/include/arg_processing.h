@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include "scene_processing.h"
 
+extern void process_help_arg(int argc, char** argv);
 extern void process_args(int argc, char** argv, RenderParameters* params);
 
 #endif
