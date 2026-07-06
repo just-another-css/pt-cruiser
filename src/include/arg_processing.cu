@@ -58,6 +58,22 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
     if (normalise) norm_vec_ip(value);
 }
 
+static void process_filepath_arg(int argc, char** argv, int* i, char** filepath, bool skip_exists_check) {
+    if (++(*i) < argc) {
+        *filepath = argv[*i];
+        if (skip_exists_check) return;
+        FILE* file_test = fopen(*filepath, "r");
+        if (file_test) fclose(file_test);
+        else {
+            fprintf(stderr, "[!] File '%s' provided with option '%s' could not be found\n", *filepath, argv[*i - 1]);
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        fprintf(stderr, "[!] No file provided with option '%s'\n", argv[*i - 1]);
+        exit(EXIT_FAILURE);
+    }
+}
+
 void process_help_arg(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         if (*argv[i] == '-' && (!strcmp(argv[i] + 1, "h") || !strcmp(argv[i] + 1, "-help"))) {
@@ -107,14 +123,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
             fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
             exit(EXIT_FAILURE);
         }
-        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) {
-            if (++i < argc) {
-                params->nvjpeg_output = argv[i];
-            } else {
-                fprintf(stderr, "[!] No output file provided with option '%s' \n", argv[i - 1]);
-                exit(EXIT_FAILURE);
-            }
-        }
+        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, true);
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) params->use_opengl = true;
         else if (!strcmp(argv[i] + 1, "fi") || !strcmp(argv[i] + 1, "-first-image")) {
             if (!last_image_set && !every_image_set) {
