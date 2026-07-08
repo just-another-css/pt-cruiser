@@ -135,16 +135,13 @@ __host__ __device__ static __forceinline__ bool nonzero_vec(float3 vec) {
 }
 
 __host__ static __forceinline__ float3 vec_rotate(float3 vec, float3 axis, float angle) {
+    if (!angle) return vec;
     float cos_angle = cosf(angle);
     return add3_vec(
         scale_vec(cos_angle, vec),
         scale_vec(sinf(angle), vec_cross_prod(axis, vec)),
         scale_vec((1 - cos_angle) * vec_dot_prod(axis, vec), axis)
     );
-}
-
-__host__ static __forceinline__ void vec_rotate_ip(float3* vec, float3 axis, float angle) {
-    *vec = vec_rotate(*vec, axis, angle);
 }
 
 __device__ static __forceinline__ uint64_t lshift_each_bit_3(uint64_t num) {
