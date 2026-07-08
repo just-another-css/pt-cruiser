@@ -188,20 +188,24 @@ int main(int argc, char **argv) {
     init_device(num_objects, meshes);
     
     float3 cam_translation, cam_rotation;
+    CameraPath path;
 
     int frame_count = 0;
     struct timespec prev;
     if (params.show_frametime) timespec_get(&prev, TIME_UTC);
     if (params.use_opengl) {
         char* nvjpeg_frame_output = params.nvjpeg_last ? NULL : params.nvjpeg_output; // do not save every frame if nvjpeg_last set
-        while (!glfwWindowShouldClose(window) && ++frame_count != params.num_frames) {
+        while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count)) {
             get_key_input(window, &params, &cam_translation, &cam_rotation);
             move_cam(&params, cam_translation, cam_rotation);
+            if (!frame_count) init_path(&path, &params, cam_translation, cam_rotation); // frame_count is 1 on first frame
+            else build_path(&path, &params, frame_count - 1, cam_translation, cam_rotation);
             render_frame(params, nvjpeg_frame_output);
             glfwSwapBuffers(window);
             glfwPollEvents();
             if (params.show_frametime) calc_frametime(&prev);
             if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
+            frame_count++;
         }
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {

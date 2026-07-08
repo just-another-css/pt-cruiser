@@ -134,6 +134,10 @@ __host__ __device__ static __forceinline__ bool nonzero_vec(float3 vec) {
     return vec.x || vec.y || vec.z;
 }
 
+__host__ static __forceinline__ bool equal_vecs(float3 vec1, float3 vec2) {
+    return vec1.x == vec2.x && vec1.y == vec2.y && vec1.z == vec2.z;
+}
+
 __host__ static __forceinline__ float3 vec_rotate(float3 vec, float3 axis, float angle) {
     if (!angle) return vec;
     float cos_angle = cosf(angle);
