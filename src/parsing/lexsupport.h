@@ -11,6 +11,17 @@ typedef enum {
     TOK_MATERIAL,
     TOK_TEXTURE,
     TOK_MAT_NUM_ARG,
+    TOK_CAMPATH,
+    TOK_CAM,
+    TOK_PITCH,
+    TOK_YAW,
+    TOK_ROLL,
+    TOK_FRAME,
+    TOK_POS,
+    TOK_DIR,
+    TOK_UP,
+    TOK_TRANSLATION,
+    TOK_ROTATION,
 
     // Numbers
     TOK_INT,

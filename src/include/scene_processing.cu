@@ -17,7 +17,11 @@ extern FILE *yyin;
 extern int yyerrors;
 extern Scene_t *parsed_scene;
 
-static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* params) {
+static float3 vec_to_f3(Vec_t vec) {
+    return make_float3(vec.x, vec.y, vec.z);
+}
+
+static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* params, CameraPath** camera_path) {
     // Process material names
     char** material_names = (char**) malloc(parsed_scene->mat_len * sizeof(char*));
     for (int i = 0; i < parsed_scene->mat_len; i++) material_names[i] = parsed_scene->materials[i].name;
@@ -274,6 +278,173 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
     if (use_x_fov) params->y_fov = params->x_fov * params->y_res / params->x_res;
     else params->x_fov = params->y_fov * params->x_res / params->y_res;
 
+    // Process camera path
+    if (parsed_scene->path_set) {
+        *camera_path = (CameraPath*) malloc(sizeof(CameraPath));
+        CameraPathNode* pos_node = parsed_scene->path[POS_LIST];
+        if (pos_node) {
+            (*camera_path)->pos_path_end = (*camera_path)->pos_path = (PositionPathNode*) malloc(sizeof(PositionPathNode));
+            (*camera_path)->pos_path_end->next = NULL;
+            do {
+                bool pos_set = false, translation_set = false, frame_set = false;
+                for (int i = 0; i < pos_node->values.len; i++) {
+                    switch (pos_node->values.values[i].type) {
+                        case FRAME:
+                            (*camera_path)->pos_path_end->frame = pos_node->values.values[i].frame;
+                            frame_set = true;
+                            break;
+                        case POS:
+                            (*camera_path)->pos_path_end->pos = vec_to_f3(pos_node->values.values[i].vec);
+                            pos_set = true;
+                            break;
+                        case TRANSLATION:
+                            (*camera_path)->pos_path_end->translation = vec_to_f3(pos_node->values.values[i].vec);
+                            translation_set = true;
+                            break;
+                        default:
+                            fputs("[!] Invalid value provided for camera position path node", stderr);
+                            exit(EXIT_FAILURE);
+                    }
+                }
+                if (!pos_set || !translation_set || !frame_set) {
+                    fputs("[!] Insufficient values provided for camera position path node", stderr);
+                    exit(EXIT_FAILURE);
+                }
+                pos_node = pos_node->next;
+                if (pos_node) {
+                    (*camera_path)->pos_path_end->next = (PositionPathNode*) malloc(sizeof(PositionPathNode));
+                    (*camera_path)->pos_path_end = (*camera_path)->pos_path_end->next;
+                    (*camera_path)->pos_path_end->next = NULL;
+                }
+            } while (pos_node);
+        } else {
+            (*camera_path)->pos_path_end = (*camera_path)->pos_path = NULL;
+        }
+        CameraPathNode* pitch_node = parsed_scene->path[PITCH_LIST];
+        if (pitch_node) {
+            (*camera_path)->pitch_path_end = (*camera_path)->pitch_path = (PitchPathNode*) malloc(sizeof(PitchPathNode));
+            (*camera_path)->pitch_path_end->next = NULL;
+            do {
+                bool dir_set = false, up_set = false, pitch_set = false, frame_set = false;
+                for (int i = 0; i < pitch_node->values.len; i++) {
+                    switch (pitch_node->values.values[i].type) {
+                        case FRAME:
+                            (*camera_path)->pitch_path_end->frame = pitch_node->values.values[i].frame;
+                            frame_set = true;
+                            break;
+                        case DIR:
+                            (*camera_path)->pitch_path_end->dir = vec_to_f3(pitch_node->values.values[i].vec);
+                            dir_set = true;
+                            break;
+                        case UP:
+                            (*camera_path)->pitch_path_end->up = vec_to_f3(pitch_node->values.values[i].vec);
+                            up_set = true;
+                            break;
+                        case ROTATION:
+                            (*camera_path)->pitch_path_end->pitch = pitch_node->values.values[i].rotation;
+                            pitch_set = true;
+                            break;
+                        default:
+                            fputs("[!] Invalid value provided for camera pitch path node", stderr);
+                            exit(EXIT_FAILURE);
+                    }
+                }
+                if (!dir_set || !up_set || !pitch_set || !frame_set) {
+                    fputs("[!] Insufficient values provided for camera pitch path node", stderr);
+                    exit(EXIT_FAILURE);
+                }
+                pitch_node = pitch_node->next;
+                if (pitch_node) {
+                    (*camera_path)->pitch_path_end->next = (PitchPathNode*) malloc(sizeof(PitchPathNode));
+                    (*camera_path)->pitch_path_end = (*camera_path)->pitch_path_end->next;
+                    (*camera_path)->pitch_path_end->next = NULL;
+                }
+            } while (pitch_node);
+        } else {
+            (*camera_path)->pitch_path_end = (*camera_path)->pitch_path = NULL;
+        }
+        CameraPathNode* yaw_node = parsed_scene->path[YAW_LIST];
+        if (yaw_node) {
+            (*camera_path)->yaw_path_end = (*camera_path)->yaw_path = (RotationPathNode*) malloc(sizeof(RotationPathNode));
+            (*camera_path)->yaw_path_end->next = NULL;
+            do {
+                bool dir_set = false, rotation_set = false, frame_set = false;
+                for (int i = 0; i < yaw_node->values.len; i++) {
+                    switch (yaw_node->values.values[i].type) {
+                        case FRAME:
+                            (*camera_path)->yaw_path_end->frame = yaw_node->values.values[i].frame;
+                            frame_set = true;
+                            break;
+                        case DIR:
+                            (*camera_path)->yaw_path_end->vec = vec_to_f3(yaw_node->values.values[i].vec);
+                            dir_set = true;
+                            break;
+                        case ROTATION:
+                            (*camera_path)->yaw_path_end->rotation = yaw_node->values.values[i].rotation;
+                            rotation_set = true;
+                            break;
+                        default:
+                            fputs("[!] Invalid value provided for camera yaw path node", stderr);
+                            exit(EXIT_FAILURE);
+                    }
+                }
+                if (!dir_set || !rotation_set || !frame_set) {
+                    fputs("[!] Insufficient values provided for camera yaw path node", stderr);
+                    exit(EXIT_FAILURE);
+                }
+                yaw_node = yaw_node->next;
+                if (yaw_node) {
+                    (*camera_path)->yaw_path_end->next = (RotationPathNode*) malloc(sizeof(RotationPathNode));
+                    (*camera_path)->yaw_path_end = (*camera_path)->yaw_path_end->next;
+                    (*camera_path)->yaw_path_end->next = NULL;
+                }
+            } while (yaw_node);
+        } else {
+            (*camera_path)->yaw_path_end = (*camera_path)->yaw_path = NULL;
+        }
+        CameraPathNode* roll_node = parsed_scene->path[ROLL_LIST];
+        if (roll_node) {
+            (*camera_path)->roll_path_end = (*camera_path)->roll_path = (RotationPathNode*) malloc(sizeof(RotationPathNode));
+            (*camera_path)->roll_path_end->next = NULL;
+            do {
+                bool dir_set = false, rotation_set = false, frame_set = false;
+                for (int i = 0; i < roll_node->values.len; i++) {
+                    switch (roll_node->values.values[i].type) {
+                        case FRAME:
+                            (*camera_path)->roll_path_end->frame = roll_node->values.values[i].frame;
+                            frame_set = true;
+                            break;
+                        case UP:
+                            (*camera_path)->roll_path_end->vec = vec_to_f3(roll_node->values.values[i].vec);
+                            dir_set = true;
+                            break;
+                        case ROTATION:
+                            (*camera_path)->roll_path_end->rotation = roll_node->values.values[i].rotation;
+                            rotation_set = true;
+                            break;
+                        default:
+                            fputs("[!] Invalid value provided for camera roll path node", stderr);
+                            exit(EXIT_FAILURE);
+                    }
+                }
+                if (!dir_set || !rotation_set || !frame_set) {
+                    fputs("[!] Insufficient values provided for camera roll path node", stderr);
+                    exit(EXIT_FAILURE);
+                }
+                roll_node = roll_node->next;
+                if (roll_node) {
+                    (*camera_path)->roll_path_end->next = (RotationPathNode*) malloc(sizeof(RotationPathNode));
+                    (*camera_path)->roll_path_end = (*camera_path)->roll_path_end->next;
+                    (*camera_path)->roll_path_end->next = NULL;
+                }
+            } while (roll_node);
+        } else {
+            (*camera_path)->roll_path_end = (*camera_path)->roll_path = NULL;
+        }
+    } else {
+        *camera_path = NULL;
+    }
+
     // Free parsed scene struct
     free_scene(parsed_scene);
 }
@@ -303,7 +474,7 @@ void init_params(RenderParameters* params) {
     };
 }
 
-void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params) {
+void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params, CameraPath** camera_path) {
     yyin = input;
     puts("[*] Starting parsing...");
     int result = yyparse();
@@ -312,5 +483,5 @@ void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParame
         exit(EXIT_FAILURE);
     }
     puts("[*] Parsing finished");
-    parse_input(num_objects, meshes, params);
+    parse_input(num_objects, meshes, params, camera_path);
 }

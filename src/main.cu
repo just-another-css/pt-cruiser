@@ -166,8 +166,9 @@ int main(int argc, char **argv) {
     int num_objects;
     PointsMesh* meshes;
     RenderParameters params;
+    CameraPath* cam_path;
     init_params(&params);
-    parse_file(input_fp, &num_objects, &meshes, &params);
+    parse_file(input_fp, &num_objects, &meshes, &params, &cam_path);
     puts("[+] Successfully parsed provided SDL file");
     fclose(input_fp);
 
@@ -191,21 +192,35 @@ int main(int argc, char **argv) {
     CameraPath path;
 
     int frame_count = 0;
+    bool loaded_camera_path = cam_path, continue_camera_path = cam_path;
     struct timespec prev;
     if (params.show_frametime) timespec_get(&prev, TIME_UTC);
     if (params.use_opengl) {
         char* nvjpeg_frame_output = params.nvjpeg_last ? NULL : params.nvjpeg_output; // do not save every frame if nvjpeg_last set
         while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count)) {
-            get_key_input(window, &params, &cam_translation, &cam_rotation);
+            if (loaded_camera_path) {
+                if (continue_camera_path && !trace_path(cam_path, frame_count, &cam_translation, &cam_rotation, &continue_camera_path)) {
+                    printf("[*] Camera path completed at frame %d\n", frame_count);
+                }
+            }
+            if (!continue_camera_path) {
+                get_key_input(window, &params, &cam_translation, &cam_rotation);
+                if (!loaded_camera_path) {
+                    if (!frame_count) init_path(&path, &params, cam_translation, cam_rotation);
+                    else build_path(&path, &params, frame_count - 1, cam_translation, cam_rotation);
+                }
+            }
             move_cam(&params, cam_translation, cam_rotation);
-            if (!frame_count) init_path(&path, &params, cam_translation, cam_rotation); // frame_count is 1 on first frame
-            else build_path(&path, &params, frame_count - 1, cam_translation, cam_rotation);
             render_frame(params, nvjpeg_frame_output);
             glfwSwapBuffers(window);
             glfwPollEvents();
             if (params.show_frametime) calc_frametime(&prev);
             if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
             frame_count++;
+        }
+        if (!loaded_camera_path) {
+            finish_path(&path, &params, frame_count);
+            write_path(&path, stdout);
         }
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {

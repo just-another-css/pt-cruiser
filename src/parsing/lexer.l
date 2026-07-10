@@ -49,6 +49,18 @@ WS          [ \t\r]+
 "smoothness"        |
 "roughness"         { yylval.sval = strdup(yytext); return TOK_MAT_NUM_ARG; }
 
+"camera_path"       { return TOK_CAMPATH; }
+"cam"               { return TOK_CAM; }
+"pitch"             { return TOK_PITCH; }
+"yaw"               { return TOK_YAW; }
+"roll"              { return TOK_ROLL; }
+"frame"             { return TOK_FRAME; }
+"pos"               { return TOK_POS; }
+"dir"               { return TOK_DIR; }
+"up"                { return TOK_UP; }
+"tran"              { return TOK_TRANSLATION; }
+"rot"               { return TOK_ROTATION; }
+
 {INT}               {
                         yylval.ival = atoi(yytext);
                         return TOK_INT;

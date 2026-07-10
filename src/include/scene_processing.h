@@ -2,6 +2,7 @@
 #define SCENE_PROCESSING_H
 
 #include "mesh.h"
+#include "camera_path_types.h"
 
 #define CAM_POS make_float3(0,0,0)
 #define CAM_DIR make_float3(0,0,1)
@@ -31,6 +32,6 @@ typedef struct {
 } RenderParameters;
 
 extern void init_params(RenderParameters* params);
-extern void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params);
+extern void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params, CameraPath** camera_path);
 
 #endif

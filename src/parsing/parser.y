@@ -54,9 +54,16 @@ int yywrap(void) {
     MatArgs *mas;
     MatArg ma;
     Param_t p;
+
+    CameraPathNodeValue cpnv;
+    CameraPathNodeValues cpnvs;
+    CameraPathNode* cpn;
+    CameraPathList cpl;
+    CameraPath_t cp;
 }
 
 %token TOK_POINTS TOK_FACES TOK_CENTRE TOK_COLOUR TOK_MATERIAL TOK_LIGHTING TOK_UV
+%token TOK_CAMPATH TOK_CAM TOK_PITCH TOK_YAW TOK_ROLL TOK_FRAME TOK_POS TOK_DIR TOK_UP TOK_TRANSLATION TOK_ROTATION
 %token <fval> TOK_POSFLOAT TOK_NEGFLOAT
 %token <ival> TOK_INT
 %token <sval> TOK_STRING TOK_MAT_NUM_ARG TOK_TEXTURE TOK_FILEPATH TOK_IDENT TOK_PARAM
@@ -80,6 +87,13 @@ int yywrap(void) {
 %type <ma> mat_arg
 %type <p> parameter
 %type <fval> float
+%type <cp> cam_path
+%type <cp> cp_lists
+%type <cpl> cp_list
+%type <cpn> cp_list_nodes
+%type <cpn> cp_list_node
+%type <cpnvs> path_vals
+%type <cpnv> path_val
 
 %start top
 
@@ -94,6 +108,7 @@ scene       : scene TOK_NEWLINE definition              { $$ = append_scene($1, 
 definition  : obj                                       { $$ = union_obj($1); }
             | material                                  { $$ = union_mat($1); }
             | parameter                                 { $$ = union_param($1); }
+            | cam_path                                  { $$ = union_path($1); }
             ;
 
 obj         : TOK_IDENT TOK_EQUALS TOK_LBRACE
@@ -174,6 +189,42 @@ mat_arg     : TOK_TEXTURE TOK_EQUALS TOK_FILEPATH       { $$ = make_mat_texture(
 
 parameter   : TOK_PARAM float                           { $$ = make_float_param($1, $2); }
             | TOK_PARAM TOK_INT                         { $$ = make_int_param($1, $2); }
+
+cam_path    : TOK_CAMPATH TOK_COLON TOK_LBRACE
+              cp_lists TOK_RBRACE                       { $$ = $4; }
+            ;
+
+cp_lists    : cp_lists TOK_COMMA cp_list                { $$ = append_cam_path($1, $3); }
+            | cp_list                                   { $$ = make_cam_path($1); }
+            ;
+
+cp_list     : TOK_CAM TOK_EQUALS TOK_LSQBRACKET
+              cp_list_nodes TOK_RSQBRACKET              { $$ = make_path_list(POS_LIST, $4); }
+            | TOK_PITCH TOK_EQUALS TOK_LSQBRACKET
+              cp_list_nodes TOK_RSQBRACKET              { $$ = make_path_list(PITCH_LIST, $4); }
+            | TOK_YAW TOK_EQUALS TOK_LSQBRACKET
+              cp_list_nodes TOK_RSQBRACKET              { $$ = make_path_list(YAW_LIST, $4); }
+            | TOK_ROLL TOK_EQUALS TOK_LSQBRACKET
+              cp_list_nodes TOK_RSQBRACKET              { $$ = make_path_list(ROLL_LIST, $4); }
+
+cp_list_nodes : cp_list_nodes TOK_COMMA cp_list_node    { $$ = append_cam_path_node($1, $3); }
+              | cp_list_node
+              ;
+
+cp_list_node : TOK_LBRACE path_vals TOK_RBRACE          { $$ = make_cam_path_node($2); }
+             ;
+
+path_vals   : path_vals TOK_COMMA path_val              { $$ = append_path_vals($1, $3); }
+            | path_val                                  { $$ = make_path_vals($1); }
+            ;
+
+path_val    : TOK_FRAME TOK_EQUALS TOK_INT              { $$ = make_path_frame($3); }
+            | TOK_POS TOK_EQUALS vec                    { $$ = make_path_vec(POS, $3); }
+            | TOK_DIR TOK_EQUALS vec                    { $$ = make_path_vec(DIR, $3); }
+            | TOK_UP TOK_EQUALS vec                     { $$ = make_path_vec(UP, $3); }
+            | TOK_TRANSLATION TOK_EQUALS vec            { $$ = make_path_vec(TRANSLATION, $3); }
+            | TOK_ROTATION TOK_EQUALS float             { $$ = make_path_rotation($3); }
+            ;
 
 float       : TOK_POSFLOAT
             | TOK_NEGFLOAT

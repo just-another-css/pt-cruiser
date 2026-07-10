@@ -109,9 +109,58 @@ typedef struct {
 } Param_t;
 
 typedef enum {
+    FRAME,
+    POS,
+    DIR,
+    UP,
+    TRANSLATION,
+    ROTATION,
+} CameraPathNodeValueType;
+
+typedef struct {
+    CameraPathNodeValueType type;
+    union {
+        int frame;
+        Vec_t vec;
+        float rotation;
+    };
+} CameraPathNodeValue;
+
+#define MAX_NUM_PATH_VALS 4
+
+typedef struct {
+    CameraPathNodeValue* values;
+    int len;
+} CameraPathNodeValues;
+
+typedef struct CameraPathNode CameraPathNode;
+
+struct CameraPathNode {
+    CameraPathNodeValues values;
+    CameraPathNode *next, *end;
+};
+
+typedef enum {
+    POS_LIST,
+    PITCH_LIST,
+    YAW_LIST,
+    ROLL_LIST,
+} CameraPathListType; // number of values must match NUM_CAM_PATH_LISTS
+
+typedef struct {
+    CameraPathListType type;
+    CameraPathNode* list;
+} CameraPathList;
+
+#define NUM_CAM_PATH_LISTS 4
+
+typedef CameraPathNode** CameraPath_t;
+
+typedef enum {
     OBJECT,
     MATERIAL,
     PARAM,
+    CAM_PATH,
 } DefinitionType;
 
 typedef struct {
@@ -120,6 +169,7 @@ typedef struct {
         Obj_t obj;
         Mat_t mat;
         Param_t param;
+        CameraPath_t cam_path;
     };
 } Definition_t;
 
@@ -133,6 +183,8 @@ typedef struct {
     Param_t* params;
     int param_capacity;
     int param_len;
+    CameraPath_t path;
+    bool path_set;
 } Scene_t;
 
 extern UV make_uv(float x, float y);
@@ -179,9 +231,25 @@ extern Param_t make_float_param(char* name, float value);
 extern Param_t make_int_param(char* name, int value);
 extern void free_param(Param_t param);
 
+extern CameraPathNodeValue make_path_frame(int frame);
+extern CameraPathNodeValue make_path_vec(CameraPathNodeValueType type, Vec_t vec);
+extern CameraPathNodeValue make_path_rotation(float rotation);
+
+extern CameraPathNodeValues make_path_vals(CameraPathNodeValue value);
+extern CameraPathNodeValues append_path_vals(CameraPathNodeValues values, CameraPathNodeValue value);
+
+extern CameraPathNode* make_cam_path_node(CameraPathNodeValues values);
+extern CameraPathNode* append_cam_path_node(CameraPathNode* list, CameraPathNode* next);
+
+extern CameraPathList make_path_list(CameraPathListType type, CameraPathNode* list);
+
+extern CameraPath_t make_cam_path(CameraPathList list);
+extern CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list);
+
 extern Definition_t union_obj(Obj_t obj);
 extern Definition_t union_mat(Mat_t mat);
 extern Definition_t union_param(Param_t param);
+extern Definition_t union_path(CameraPath_t path);
 
 extern Scene_t* make_scene(Definition_t definition);
 extern Scene_t* append_scene(Scene_t* scene, Definition_t definition);

@@ -302,6 +302,81 @@ void free_param(Param_t param) {
     free(param.name);
 }
 
+CameraPathNodeValue make_path_frame(int frame) {
+    return (CameraPathNodeValue) {
+        .type = FRAME,
+        .frame = frame
+    };
+}
+
+CameraPathNodeValue make_path_vec(CameraPathNodeValueType type, Vec_t vec) {
+    return (CameraPathNodeValue) {
+        .type = type,
+        .vec = vec
+    };
+}
+
+CameraPathNodeValue make_path_rotation(float rotation) {
+    return (CameraPathNodeValue) {
+        .type = ROTATION,
+        .rotation = rotation
+    };
+}
+
+CameraPathNodeValues append_path_vals(CameraPathNodeValues values, CameraPathNodeValue value);
+
+CameraPathNodeValues make_path_vals(CameraPathNodeValue value) {
+    CameraPathNodeValues values = (CameraPathNodeValues) {
+        .values = malloc(MAX_NUM_PATH_VALS * sizeof(CameraPathNodeValue))
+    };
+    return append_path_vals(values, value);
+}
+
+CameraPathNodeValues append_path_vals(CameraPathNodeValues values, CameraPathNodeValue value) {
+    if (values.len == MAX_NUM_PATH_VALS) {
+        fputs("[!] Too many values provided for a camera path node", stderr);
+        exit(EXIT_FAILURE);
+    }
+    values.values[values.len++] = value;
+    return values;
+}
+
+CameraPathNode* make_cam_path_node(CameraPathNodeValues values) {
+    CameraPathNode* node = (CameraPathNode*) malloc(sizeof(CameraPathNode));
+    node->values = values;
+    node->next = NULL;
+    node->end = node;
+    return node;
+}
+
+CameraPathNode* append_cam_path_node(CameraPathNode* list, CameraPathNode* next) {
+    list->end->next = next;
+    list->end = next;
+    return list;
+}
+
+CameraPathList make_path_list(CameraPathListType type, CameraPathNode* list) {
+    return (CameraPathList) {
+        .type = type,
+        .list = list
+    };
+}
+
+CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list);
+
+CameraPath_t make_cam_path(CameraPathList list) {
+    CameraPath_t path = (CameraPath_t) calloc(NUM_CAM_PATH_LISTS, sizeof(CameraPathNode*));
+    return append_cam_path(path, list);
+}
+
+CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list) {
+    path[list.type] = list.list;
+    return path;
+}
+
+void free_cam_path(CameraPath_t path) {
+    // TODO: traverse lists and free
+}
 
 Definition_t union_obj(Obj_t obj) {
     return (Definition_t) {
@@ -324,12 +399,21 @@ Definition_t union_param(Param_t param) {
     };
 }
 
+Definition_t union_path(CameraPath_t path) {
+    return (Definition_t) {
+        .type = CAM_PATH,
+        .cam_path = path
+    };
+}
+
 static Scene_t* init_scene() {
     Scene_t* scene = malloc(sizeof(Scene_t));
     assert(scene);
     make_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, LIST_INITIAL_CAPACITY, sizeof(Obj_t));
     make_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, LIST_INITIAL_CAPACITY, sizeof(Mat_t));
     make_list(&scene->params, &scene->param_len, &scene->param_capacity, LIST_INITIAL_CAPACITY, sizeof(Param_t));
+    scene->path = NULL;
+    scene->path_set = false;
     return scene;
 }
 
@@ -351,6 +435,13 @@ Scene_t* make_scene(Definition_t definition) {
             scene->obj_len = 0;
             scene->mat_len = 0;
             break;
+        case CAM_PATH:
+            if (scene->path_set) {
+                fputs("[!] Multiple camera paths defined", stderr);
+                exit(EXIT_FAILURE);
+            }
+            scene->path = definition.cam_path;
+            scene->path_set = true;
     }
     return scene;
 }
@@ -366,6 +457,13 @@ Scene_t* append_scene(Scene_t* scene, Definition_t definition) {
         case PARAM:
             append_list(&scene->params, &scene->param_len, &scene->param_capacity, &definition.param, sizeof(Param_t));
             break;
+        case CAM_PATH:
+            if (scene->path_set) {
+                fputs("[!] Multiple camera paths defined", stderr);
+                exit(EXIT_FAILURE);
+            }
+            scene->path = definition.cam_path;
+            scene->path_set = true;
     }
     return scene;
 }
