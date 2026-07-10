@@ -125,7 +125,7 @@ void write_path(CameraPath* path, FILE* output) {
     while ((roll_path = roll_path->next)) {
         fprintf(output, ", { frame = %d, up = (%f,%f,%f), rot = %f }", roll_path->frame, roll_path->vec.x, roll_path->vec.y, roll_path->vec.z, roll_path->rotation);
     }
-    fputs("] }\n", output);
+    fputs("] }", output);
 }
 
 bool trace_path(CameraPath* path, int frame, float3* translation, float3* rotation, bool* continue_path) {

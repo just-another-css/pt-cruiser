@@ -471,6 +471,8 @@ void init_params(RenderParameters* params) {
         .use_denoising = true,
         .use_bloom = true,
         .nvjpeg_output = NULL,
+        .use_cam_path = true,
+        .append_cam_path = NULL,
     };
 }
 

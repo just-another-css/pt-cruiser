@@ -193,6 +193,7 @@ int main(int argc, char **argv) {
 
     int frame_count = 0;
     bool loaded_camera_path = cam_path, continue_camera_path = cam_path;
+    if (loaded_camera_path) printf("[*] Tracing camera path...\n");
     struct timespec prev;
     if (params.show_frametime) timespec_get(&prev, TIME_UTC);
     if (params.use_opengl) {
@@ -205,7 +206,7 @@ int main(int argc, char **argv) {
             }
             if (!continue_camera_path) {
                 get_key_input(window, &params, &cam_translation, &cam_rotation);
-                if (!loaded_camera_path) {
+                if (!loaded_camera_path && params.cam_path_output) {
                     if (!frame_count) init_path(&path, &params, cam_translation, cam_rotation);
                     else build_path(&path, &params, frame_count - 1, cam_translation, cam_rotation);
                 }
@@ -218,9 +219,12 @@ int main(int argc, char **argv) {
             if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
             frame_count++;
         }
-        if (!loaded_camera_path) {
+        if (!loaded_camera_path && params.cam_path_output) {
             finish_path(&path, &params, frame_count);
-            write_path(&path, stdout);
+            FILE* cam_path_file = fopen(params.cam_path_output, params.append_cam_path ? "a" : "w");
+            if (params.append_cam_path) fputc('\n', cam_path_file);
+            write_path(&path, cam_path_file);
+            fclose(cam_path_file);
         }
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {

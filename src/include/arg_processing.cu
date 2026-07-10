@@ -58,15 +58,16 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
     if (normalise) norm_vec_ip(value);
 }
 
-static void process_filepath_arg(int argc, char** argv, int* i, char** filepath, bool skip_exists_check) {
+static void process_filepath_arg(int argc, char** argv, int* i, char** filepath, bool check_exists) {
     if (++(*i) < argc) {
         *filepath = argv[*i];
-        if (skip_exists_check) return;
-        FILE* file_test = fopen(*filepath, "r");
-        if (file_test) fclose(file_test);
-        else {
-            fprintf(stderr, "[!] File '%s' provided with option '%s' could not be found\n", *filepath, argv[*i - 1]);
-            exit(EXIT_FAILURE);
+        if (check_exists) {
+            FILE* file_test = fopen(*filepath, "r");
+            if (file_test) fclose(file_test);
+            else {
+                fprintf(stderr, "[!] File '%s' provided with option '%s' could not be found\n", *filepath, argv[*i - 1]);
+                exit(EXIT_FAILURE);
+            }
         }
     } else {
         fprintf(stderr, "[!] No file provided with option '%s'\n", argv[*i - 1]);
@@ -103,6 +104,9 @@ void process_help_arg(int argc, char** argv) {
                    "    -up,   --camera-up <x> <y> <z>        Set initial camera up vector\n"
                    "    -spd,  --camera-speed <float>   Set camera movement speed\n"
                    "    -rspd, --camera-rot-speed <float>     Set camera rotation speed\n"
+                   "    -ncp,  --no-camera-path <file>    Ignore any camera paths in SDL file\n"
+                   "    -acp,  --append-camera-path     Append camera path to loaded SDL file\n"
+                   "    -wcp,  --write-camera-path <file>     Overwrite given file with camera path\n"
                    "    -xf,   --x-fov <float>          Set x/horizontal field of view\n"
                    "    -yf,   --y-fov <float>          Set y/vertical field of view\n"
                    "    -xr,   --x-resolution <int>     Set x/horizontal resolution\n"
@@ -119,17 +123,18 @@ void process_help_arg(int argc, char** argv) {
 
 void process_args(int argc, char** argv, RenderParameters* params) {
     bool first_image_set = false, last_image_set = false, every_image_set = false;
+    bool append_cam_path_set = false, write_cam_path_set = false;
     bool x_fov_set = false, y_fov_set = false;
     for (int i = 2; i < argc; i++) {
         if (*argv[i] != '-') {
             fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
             exit(EXIT_FAILURE);
         }
-        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, true);
+        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, false);
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) params->use_opengl = true;
         else if (!strcmp(argv[i] + 1, "ri")) {
             params->use_opengl = true;
-            process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, true);
+            process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, false);
         }
         else if (!strcmp(argv[i] + 1, "fi") || !strcmp(argv[i] + 1, "-first-image")) {
             if (!last_image_set && !every_image_set) {
@@ -175,6 +180,25 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true, true);
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "rspd") || !strcmp(argv[i] + 1, "-camera-rot-speed")) process_float_arg(argc, argv, &i, &params->cam_rotation_speed, 0, FLT_MAX);
+        else if (!strcmp(argv[i] + 1, "ncp") || !strcmp(argv[i] + 1, "-no-camera-path")) params->use_cam_path = false;
+        else if (!strcmp(argv[i] + 1, "acp") || !strcmp(argv[i] + 1, "-append-camera-path")) {
+            if (write_cam_path_set) {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -wcp/--write-camera-path\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            params->append_cam_path = true;
+            params->cam_path_output = argv[1];
+            append_cam_path_set = true;
+        }
+        else if (!strcmp(argv[i] + 1, "wcp") || !strcmp(argv[i] + 1, "-write-camera-path")) {
+            if (append_cam_path_set) {
+                fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -acp/--append-camera-path\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            params->append_cam_path = false;
+            process_filepath_arg(argc, argv, &i, &params->cam_path_output, false);
+            write_cam_path_set = true;
+        }
         else if (!strcmp(argv[i] + 1, "xf") || !strcmp(argv[i] + 1, "-x-fov")) {
             if (!y_fov_set) {
                 process_float_arg(argc, argv, &i, &params->x_fov, MIN_FOV, MAX_FOV);
