@@ -192,7 +192,8 @@ int main(int argc, char **argv) {
     CameraPath path;
 
     int frame_count = 0;
-    bool loaded_camera_path = cam_path, continue_camera_path = cam_path;
+    bool loaded_camera_path = cam_path, continue_camera_path = cam_path, build_camera_path = false;
+    int camera_path_offset = 0;
     if (loaded_camera_path) printf("[*] Tracing camera path...\n");
     struct timespec prev;
     if (params.show_frametime) timespec_get(&prev, TIME_UTC);
@@ -206,9 +207,24 @@ int main(int argc, char **argv) {
             }
             if (!continue_camera_path) {
                 get_key_input(window, &params, &cam_translation, &cam_rotation);
-                if (!loaded_camera_path && params.cam_path_output) {
-                    if (!frame_count) init_path(&path, &params, cam_translation, cam_rotation);
-                    else build_path(&path, &params, frame_count - 1, cam_translation, cam_rotation);
+                if (params.cam_path_output) {
+                    if (build_camera_path) {
+                        build_path(&path, &params, frame_count - camera_path_offset, cam_translation, cam_rotation);
+                        if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
+                            build_camera_path = false;
+                            finish_path(&path, &params, frame_count - camera_path_offset);
+                            FILE* cam_path_file = fopen(params.cam_path_output, params.append_cam_path ? "a" : "w");
+                            if (params.append_cam_path) fputc('\n', cam_path_file);
+                            write_path(&path, cam_path_file);
+                            fclose(cam_path_file);
+                            printf("[*] Saved camera path with %d frames to %s\n", frame_count - camera_path_offset, params.cam_path_output);
+                        }
+                    } else if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
+                        printf("[*] Recording camera path...\n");
+                        build_camera_path = true;
+                        camera_path_offset = frame_count;
+                        init_path(&path, &params, cam_translation, cam_rotation);
+                    }
                 }
             }
             move_cam(&params, cam_translation, cam_rotation);
@@ -218,13 +234,6 @@ int main(int argc, char **argv) {
             if (params.show_frametime) calc_frametime(&prev);
             if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
             frame_count++;
-        }
-        if (!loaded_camera_path && params.cam_path_output) {
-            finish_path(&path, &params, frame_count);
-            FILE* cam_path_file = fopen(params.cam_path_output, params.append_cam_path ? "a" : "w");
-            if (params.append_cam_path) fputc('\n', cam_path_file);
-            write_path(&path, cam_path_file);
-            fclose(cam_path_file);
         }
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {
