@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
     if (params.show_frametime) timespec_get(&prev, TIME_UTC);
     if (params.use_opengl) {
         char* nvjpeg_frame_output = params.nvjpeg_last ? NULL : params.nvjpeg_output; // do not save every frame if nvjpeg_last set
-        while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count)) {
+        while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count || (trace_camera_path && params.complete_cam_path))) {
             if (loaded_camera_path) {
                 if (trace_camera_path) {
                     trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, &params, &cam_translation, &cam_rotation, &trace_camera_path);
@@ -246,9 +246,13 @@ int main(int argc, char **argv) {
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {
         do {
+repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
             render_frame(params, params.nvjpeg_output);
-            if (loaded_camera_path) if (trace_camera_path) if (!(trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
             if (params.show_frametime) calc_frametime(&prev);
+            if (trace_camera_path && params.complete_cam_path) {
+                frame_count++;
+                goto repeat;
+            }
         } while (++frame_count < params.num_frames);
     }
     

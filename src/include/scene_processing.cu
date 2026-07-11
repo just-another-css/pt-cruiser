@@ -472,7 +472,9 @@ void init_params(RenderParameters* params) {
         .use_bloom = true,
         .nvjpeg_output = NULL,
         .use_cam_path = true,
-        .append_cam_path = NULL,
+        .append_cam_path = false,
+        .complete_cam_path = false,
+        .cam_path_output = NULL,
     };
 }
 
