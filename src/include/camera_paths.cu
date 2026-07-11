@@ -128,26 +128,37 @@ void write_path(CameraPath* path, FILE* output) {
     fputs("] }", output);
 }
 
-bool trace_path(CameraPath* path, int frame, float3* translation, float3* rotation, bool* continue_path) {
+void start_trace_path(CameraPath* path, RenderParameters* params) {
+    params->cam_pos = path->pos_path->pos;
+    params->cam_dir = path->pitch_path->dir; // pitch path and yaw/roll paths should match on first node due to init_path behaviour
+    params->cam_up = path->pitch_path->up;
+}
+
+bool trace_path(CameraPath* path, int frame, RenderParameters* params, float3* translation, float3* rotation, bool* continue_path) {
     if (path->pos_path != path->pos_path_end && frame == path->pos_path->next->frame) {
         PositionPathNode* next = path->pos_path->next;
         free(path->pos_path);
         path->pos_path = next;
+        params->cam_pos = path->pos_path->pos;
     }
     if (path->pitch_path != path->pitch_path_end && frame == path->pitch_path->next->frame) {
         PitchPathNode* next = path->pitch_path->next;
         free(path->pitch_path);
         path->pitch_path = next;
+        params->cam_dir = path->pitch_path->dir;
+        params->cam_up = path->pitch_path->up;
     }
     if (path->yaw_path != path->yaw_path_end && frame == path->yaw_path->next->frame) {
         RotationPathNode* next = path->yaw_path->next;
         free(path->yaw_path);
         path->yaw_path = next;
+        params->cam_dir = path->yaw_path->vec;
     }
     if (path->roll_path != path->roll_path_end && frame == path->roll_path->next->frame) {
         RotationPathNode* next = path->roll_path->next;
         free(path->roll_path);
         path->roll_path = next;
+        params->cam_up = path->roll_path->vec;
     }
     *translation = path->pos_path->translation;
     *rotation = make_float3(

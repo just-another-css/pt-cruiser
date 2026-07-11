@@ -8,7 +8,8 @@ extern void move_cam(RenderParameters* params, float3 translation, float3 rotati
 extern void init_path(CameraPath* path, RenderParameters* params, float3 translation, float3 rotation);
 extern void build_path(CameraPath* path, RenderParameters* params, int frame, float3 translation, float3 rotation);
 extern void finish_path(CameraPath* path, RenderParameters* params, int frame_count);
-extern bool trace_path(CameraPath* path, int frame, float3* translation, float3* rotation, bool* continue_path);
+extern void start_trace_path(CameraPath* path, RenderParameters* params);
+extern bool trace_path(CameraPath* path, int frame, RenderParameters* params, float3* translation, float3* rotation, bool* continue_path);
 extern void write_path(CameraPath* path, FILE* output);
 
 #endif

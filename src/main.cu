@@ -194,7 +194,10 @@ int main(int argc, char **argv) {
     int frame_count = 0;
     bool loaded_camera_path = cam_path, trace_camera_path = cam_path, build_camera_path = false;
     int cam_path_frame_offset = 0;
-    if (loaded_camera_path) printf("[*] Tracing camera path...\n");
+    if (loaded_camera_path) {
+        printf("[*] Tracing camera path...\n");
+        start_trace_path(cam_path, &params);
+    }
     struct timespec prev;
     if (params.show_frametime) timespec_get(&prev, TIME_UTC);
     if (params.use_opengl) {
@@ -202,7 +205,7 @@ int main(int argc, char **argv) {
         while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count)) {
             if (loaded_camera_path) {
                 if (trace_camera_path) {
-                    trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, &cam_translation, &cam_rotation, &trace_camera_path);
+                    trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, &params, &cam_translation, &cam_rotation, &trace_camera_path);
                     if (!trace_camera_path) printf("[*] Camera path completed at frame %d\n", frame_count);
                     else {
                         trace_camera_path = glfwGetKey(window, GLFW_KEY_H) != GLFW_PRESS;
