@@ -247,6 +247,7 @@ int main(int argc, char **argv) {
     } else {
         do {
             render_frame(params, params.nvjpeg_output);
+            if (loaded_camera_path) if (trace_camera_path) if (!(trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
             if (params.show_frametime) calc_frametime(&prev);
         } while (++frame_count < params.num_frames);
     }
