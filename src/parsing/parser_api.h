@@ -103,9 +103,19 @@ typedef struct {
     MatArgs* args;
 } Mat_t;
 
+typedef enum {
+    INT_PARAM,
+    FLOAT_PARAM,
+    VEC_PARAM,
+} ParamType;
+
 typedef struct {
+    union {
+        float num_value;
+        Vec_t vec_value;
+    };
+    ParamType type;
     char* name;
-    float value;
 } Param_t;
 
 typedef enum {
@@ -229,6 +239,7 @@ extern void free_material(Mat_t material);
 
 extern Param_t make_float_param(char* name, float value);
 extern Param_t make_int_param(char* name, int value);
+extern Param_t make_vec_param(char* name, Vec_t value);
 extern void free_param(Param_t param);
 
 extern CameraPathNodeValue make_path_frame(int frame);

@@ -244,26 +244,32 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
         valid = true;
         switch (*parsed_scene->params[i].name) {
             case 'x':
-                if (!strcmp(parsed_scene->params[i].name + 1, "_res")) params->x_res = parsed_scene->params[i].value;
+                if (!strcmp(parsed_scene->params[i].name + 1, "_res")) params->x_res = parsed_scene->params[i].num_value;
                 else if (!strcmp(parsed_scene->params[i].name + 1, "_fov")) {
-                    params->x_fov = parsed_scene->params[i].value;
+                    params->x_fov = parsed_scene->params[i].num_value;
                     use_x_fov = true;
                 } else valid = false;
                 break;
             case 'y':
-                if (!strcmp(parsed_scene->params[i].name + 1, "_res")) params->y_res = parsed_scene->params[i].value;
+                if (!strcmp(parsed_scene->params[i].name + 1, "_res")) params->y_res = parsed_scene->params[i].num_value;
                 else if (!strcmp(parsed_scene->params[i].name + 1, "_fov")) {
-                    params->y_fov = parsed_scene->params[i].value;
+                    params->y_fov = parsed_scene->params[i].num_value;
                     use_x_fov = false;
                 } else valid = false;
                 break;
             case 'p':
-                if (!strcmp(parsed_scene->params[i].name + 1, "ixel_ray_grid_dim")) params->pixel_ray_grid_dim = parsed_scene->params[i].value;
-                else if (!strcmp(parsed_scene->params[i].name + 1, "ixels_per_tile")) params->pixels_per_tile = parsed_scene->params[i].value;
+                if (!strcmp(parsed_scene->params[i].name + 1, "ixel_ray_grid_dim")) params->pixel_ray_grid_dim = parsed_scene->params[i].num_value;
+                else if (!strcmp(parsed_scene->params[i].name + 1, "ixels_per_tile")) params->pixels_per_tile = parsed_scene->params[i].num_value;
                 else valid = false;
                 break;
             case 'r':
-                if (!strcmp(parsed_scene->params[i].name + 1, "ay_bounce_limit")) params->ray_bounce_limit = parsed_scene->params[i].value;
+                if (!strcmp(parsed_scene->params[i].name + 1, "ay_bounce_limit")) params->ray_bounce_limit = parsed_scene->params[i].num_value;
+                else valid = false;
+                break;
+            case 'c':
+                if (!strcmp(parsed_scene->params[i].name + 1, "am_pos")) params->cam_pos = vec_to_f3(parsed_scene->params[i].vec_value);
+                else if (!strcmp(parsed_scene->params[i].name + 1, "am_dir")) params->cam_dir = vec_to_f3(parsed_scene->params[i].vec_value);
+                else if (!strcmp(parsed_scene->params[i].name + 1, "am_up")) params->cam_up = vec_to_f3(parsed_scene->params[i].vec_value);
                 else valid = false;
                 break;
             default:

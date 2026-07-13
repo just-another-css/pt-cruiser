@@ -286,15 +286,25 @@ void free_material(Mat_t material) {
 
 Param_t make_float_param(char* name, float value) {
     return (Param_t) {
+        .num_value = value,
+        .type = FLOAT_PARAM,
         .name = name,
-        .value = value
     };
 }
 
 Param_t make_int_param(char* name, int value) {
     return (Param_t) {
+        .num_value = value,
+        .type = INT_PARAM,
         .name = name,
-        .value = value
+    };
+}
+
+Param_t make_vec_param(char* name, Vec_t value) {
+    return (Param_t) {
+        .vec_value = value,
+        .type = VEC_PARAM,
+        .name = name,
     };
 }
 

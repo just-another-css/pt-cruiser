@@ -189,6 +189,8 @@ mat_arg     : TOK_TEXTURE TOK_EQUALS TOK_FILEPATH       { $$ = make_mat_texture(
 
 parameter   : TOK_PARAM float                           { $$ = make_float_param($1, $2); }
             | TOK_PARAM TOK_INT                         { $$ = make_int_param($1, $2); }
+            | TOK_PARAM vec                             { $$ = make_vec_param($1, $2); }
+            ;
 
 cam_path    : TOK_CAMPATH TOK_COLON TOK_LBRACE
               cp_lists TOK_RBRACE                       { $$ = $4; }
