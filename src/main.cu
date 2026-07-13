@@ -194,17 +194,17 @@ int main(int argc, char **argv) {
     float3 cam_translation, cam_rotation;
 
     int frame_count = 0;
-    bool loaded_camera_path = cam_path, trace_camera_path = false, build_camera_path = false;
-    // if (trace_camera_path) {
-    //     printf("[*] Tracing camera path...\n");
-    //     start_trace_path(cam_path, &params);
-    // }
+    bool loaded_camera_path = cam_path, trace_camera_path = loaded_camera_path && params.start_cam_path, build_camera_path = false;
+    if (trace_camera_path) {
+        printf("[*] Tracing camera path...\n");
+        start_trace_path(cam_path, &params);
+    }
     struct timespec start, prev, cur;
     bool use_frametime = params.show_frametime || params.cam_path_framerate;
     float frametime, cam_path_frametime = 1000.0 / params.cam_path_framerate, cam_path_fps_scale = 1;
     frametime = cam_path_frametime;
     int cam_path_frame_offset = 0, cam_path_frame_count;
-    if (params.cam_path_framerate) {
+    if (params.cam_path_framerate && trace_camera_path) {
         timespec_get(&start, TIME_UTC);
         if (params.show_frametime) prev = start;
     } else if (params.show_frametime) timespec_get(&prev, TIME_UTC);

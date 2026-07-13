@@ -480,6 +480,7 @@ void init_params(RenderParameters* params) {
         .nvjpeg_output = NULL,
         .use_cam_path = true,
         .append_cam_path = false,
+        .start_cam_path = false,
         .complete_cam_path = false,
         .cam_path_output = NULL,
         .cam_path_framerate = 0,

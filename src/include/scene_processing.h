@@ -29,7 +29,7 @@ typedef struct {
     int num_frames, image_quality;
     bool use_opengl, nvjpeg_first, nvjpeg_last, nvjpeg_every, show_frametime, use_denoising, use_bloom;
     char* nvjpeg_output;
-    bool use_cam_path, append_cam_path, complete_cam_path;
+    bool use_cam_path, append_cam_path, start_cam_path, complete_cam_path;
     char* cam_path_output;
     int cam_path_framerate;
 } RenderParameters;

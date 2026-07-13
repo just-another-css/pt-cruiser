@@ -105,6 +105,7 @@ void process_help_arg(int argc, char** argv) {
                    "    -spd,  --camera-speed <float>   Set camera movement speed\n"
                    "    -rspd, --camera-rot-speed <float>     Set camera rotation speed\n"
                    "    -ncp,  --no-camera-path <file>    Ignore any camera paths in SDL file\n"
+                   "    -scp,  --start-camera-path      Start tracing camera path on first frame\n"
                    "    -ccp,  --complete-camera-path   Override frame cap to render at least all\n"
                    "                                    frames in loaded camera path\n"
                    "    -pfr,  --path-framerate <int>   Set camera path framerate for loaded and\n"
@@ -185,6 +186,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "rspd") || !strcmp(argv[i] + 1, "-camera-rot-speed")) process_float_arg(argc, argv, &i, &params->cam_rotation_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "ncp") || !strcmp(argv[i] + 1, "-no-camera-path")) params->use_cam_path = false;
+        else if (!strcmp(argv[i] + 1, "scp") || !strcmp(argv[i] + 1, "-start-camera-path")) params->start_cam_path = true;
         else if (!strcmp(argv[i] + 1, "ccp") || !strcmp(argv[i] + 1, "-complete-camera-path")) params->complete_cam_path = true;
         else if (!strcmp(argv[i] + 1, "pfr") || !strcmp(argv[i] + 1, "-path-framerate")) process_int_arg(argc, argv, &i, &params->cam_path_framerate, 0, INT_MAX);
         else if (!strcmp(argv[i] + 1, "acp") || !strcmp(argv[i] + 1, "-append-camera-path")) {
