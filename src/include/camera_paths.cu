@@ -131,6 +131,10 @@ void write_path(CameraPath* path, int path_fps, FILE* output) {
 }
 
 void start_trace_path(CameraPath* path, RenderParameters* params) {
+    path->pos_path = path->pos_path_start;
+    path->pitch_path = path->pitch_path_start;
+    path->yaw_path = path->yaw_path_start;
+    path->roll_path = path->roll_path_start;
     params->cam_pos = path->pos_path->pos;
     params->cam_dir = path->pitch_path->dir; // pitch path and yaw/roll paths should match on first node due to init_path behaviour
     params->cam_up = path->pitch_path->up;

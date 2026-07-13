@@ -194,11 +194,11 @@ int main(int argc, char **argv) {
     float3 cam_translation, cam_rotation;
 
     int frame_count = 0;
-    bool loaded_camera_path = cam_path, trace_camera_path = cam_path, build_camera_path = false;
-    if (loaded_camera_path) {
-        printf("[*] Tracing camera path...\n");
-        start_trace_path(cam_path, &params);
-    }
+    bool loaded_camera_path = cam_path, trace_camera_path = false, build_camera_path = false;
+    // if (trace_camera_path) {
+    //     printf("[*] Tracing camera path...\n");
+    //     start_trace_path(cam_path, &params);
+    // }
     struct timespec start, prev, cur;
     bool use_frametime = params.show_frametime || params.cam_path_framerate;
     float frametime, cam_path_frametime = 1000.0 / params.cam_path_framerate, cam_path_fps_scale = 1;
@@ -219,6 +219,12 @@ int main(int argc, char **argv) {
                         trace_camera_path = glfwGetKey(window, GLFW_KEY_H) != GLFW_PRESS;
                         if (!trace_camera_path) printf("[*] Camera path aborted\n");
                     }
+                } else if (glfwGetKey(window, GLFW_KEY_Y) == GLFW_PRESS && !build_camera_path) {
+                    printf("[*] Tracing camera path...\n");
+                    trace_camera_path = true;
+                    cam_path_frame_offset = frame_count;
+                    if (params.cam_path_framerate) timespec_get(&start, TIME_UTC);
+                    start_trace_path(cam_path, &params);
                 }
             }
             if (!trace_camera_path) {
