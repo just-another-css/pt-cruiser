@@ -16,3 +16,6 @@ shortbox = { points = [(0.565, -1.0, 0.784), (1.085, -1.0, 1.084), (0.835, -1.0,
 -x_fov 1.2
 -pixel_ray_grid_dim 1
 -ray_bounce_limit 6
+-cam_pos (-0.0,1.0,-3.0)
+-cam_dir (1.0,0.0,0.0)
+-cam_up  (0.0,-1.0,0.0)
