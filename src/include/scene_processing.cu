@@ -271,7 +271,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
                 break;
         }
         if (!valid) {
-            fprintf(stderr, "[!] Parameter #%d '%s' with values %f was not recognised", i, parsed_scene->params[i].name, parsed_scene->params[i].value);
+            fprintf(stderr, "[!] Parameter #%d '%s' with value %f/(%f,%f,%f) was not recognised\n", i, parsed_scene->params[i].name, parsed_scene->params[i].num_value, parsed_scene->params[i].vec_value.x, parsed_scene->params[i].vec_value.y, parsed_scene->params[i].vec_value.z);
             exit(EXIT_FAILURE);
         }
     }
