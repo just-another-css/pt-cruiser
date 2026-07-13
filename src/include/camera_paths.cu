@@ -47,7 +47,7 @@ void init_path(CameraPath* path, RenderParameters* params, float3 translation, f
     RotationPathNode* roll_node = (RotationPathNode*) malloc(sizeof(RotationPathNode));
     *roll_node = (RotationPathNode) {
         .vec = params->cam_up,
-        .rotation = rotation.y,
+        .rotation = rotation.z,
     };
     path->roll_path_end = path->roll_path = roll_node;
 }
