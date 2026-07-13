@@ -24,14 +24,15 @@ void move_cam(RenderParameters* params, float3 translation, float3 rotation) {
     }
 }
 
-void init_path(CameraPath* path, RenderParameters* params, int frame, float3 translation, float3 rotation) {
+void init_path(CameraPath** path, RenderParameters* params, int frame, float3 translation, float3 rotation) {
+    *path = (CameraPath*) malloc(sizeof(CameraPath));
     PositionPathNode* pos_node = (PositionPathNode*) malloc(sizeof(PositionPathNode));
     *pos_node = (PositionPathNode) {
         .pos = params->cam_pos,
         .translation = translation,
         .frame = frame,
     };
-    path->pos_path_end = path->pos_path = pos_node;
+    (*path)->pos_path_start = (*path)->pos_path_end = (*path)->pos_path = pos_node;
     PitchPathNode* pitch_node = (PitchPathNode*) malloc(sizeof(PitchPathNode));
     *pitch_node = (PitchPathNode) {
         .dir = params->cam_dir,
@@ -39,21 +40,21 @@ void init_path(CameraPath* path, RenderParameters* params, int frame, float3 tra
         .pitch = rotation.x,
         .frame = frame,
     };
-    path->pitch_path_end = path->pitch_path = pitch_node;
+    (*path)->pitch_path_start = (*path)->pitch_path_end = (*path)->pitch_path = pitch_node;
     RotationPathNode* yaw_node = (RotationPathNode*) malloc(sizeof(RotationPathNode));
     *yaw_node = (RotationPathNode) {
         .vec = params->cam_dir,
         .rotation = rotation.y,
         .frame = frame,
     };
-    path->yaw_path_end = path->yaw_path = yaw_node;
+    (*path)->yaw_path_start = (*path)->yaw_path_end = (*path)->yaw_path = yaw_node;
     RotationPathNode* roll_node = (RotationPathNode*) malloc(sizeof(RotationPathNode));
     *roll_node = (RotationPathNode) {
         .vec = params->cam_up,
         .rotation = rotation.z,
         .frame = frame,
     };
-    path->roll_path_end = path->roll_path = roll_node;
+    (*path)->roll_path_start = (*path)->roll_path_end = (*path)->roll_path = roll_node;
 }
 
 void build_path(CameraPath* path, RenderParameters* params, int frame, float3 translation, float3 rotation) {
@@ -142,26 +143,22 @@ void start_trace_path(CameraPath* path, RenderParameters* params) {
 bool trace_path(CameraPath* path, int frame, float fps_scale, RenderParameters* params, float3* translation, float3* rotation, bool* continue_path) {
     if (path->pos_path != path->pos_path_end && frame >= path->pos_path->next->frame) {
         PositionPathNode* next = path->pos_path->next;
-        free(path->pos_path);
         path->pos_path = next;
         params->cam_pos = path->pos_path->pos;
     }
     if (path->pitch_path != path->pitch_path_end && frame >= path->pitch_path->next->frame) {
         PitchPathNode* next = path->pitch_path->next;
-        free(path->pitch_path);
         path->pitch_path = next;
         params->cam_dir = path->pitch_path->dir;
         params->cam_up = path->pitch_path->up;
     }
     if (path->yaw_path != path->yaw_path_end && frame >= path->yaw_path->next->frame) {
         RotationPathNode* next = path->yaw_path->next;
-        free(path->yaw_path);
         path->yaw_path = next;
         params->cam_dir = path->yaw_path->vec;
     }
     if (path->roll_path != path->roll_path_end && frame >= path->roll_path->next->frame) {
         RotationPathNode* next = path->roll_path->next;
-        free(path->roll_path);
         path->roll_path = next;
         params->cam_up = path->roll_path->vec;
     }
@@ -176,4 +173,32 @@ bool trace_path(CameraPath* path, int frame, float fps_scale, RenderParameters* 
         path->yaw_path == path->yaw_path_end &&
         path->roll_path == path->roll_path_end) *continue_path = false;
     return *continue_path;
+}
+
+void free_path(CameraPath* path) {
+    PositionPathNode* pos_node = path->pos_path_start, *next_pos_node;
+    while (pos_node) {
+        next_pos_node = pos_node->next;
+        free(pos_node);
+        pos_node = next_pos_node;
+    }
+    PitchPathNode* pitch_node = path->pitch_path_start, *next_pitch_node;
+    while (pitch_node) {
+        next_pitch_node = pitch_node->next;
+        free(pitch_node);
+        pitch_node = next_pitch_node;
+    }
+    RotationPathNode* yaw_node = path->yaw_path_start, *next_yaw_node;
+    while (yaw_node) {
+        next_yaw_node = yaw_node->next;
+        free(yaw_node);
+        yaw_node = next_yaw_node;
+    }
+    RotationPathNode* roll_node = path->roll_path_start, *next_roll_node;
+    while (roll_node) {
+        next_roll_node = roll_node->next;
+        free(roll_node);
+        roll_node = next_roll_node;
+    }
+    free(path);
 }

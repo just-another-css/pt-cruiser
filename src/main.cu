@@ -192,7 +192,6 @@ int main(int argc, char **argv) {
     init_device(num_objects, meshes);
     
     float3 cam_translation, cam_rotation;
-    CameraPath path;
 
     int frame_count = 0;
     bool loaded_camera_path = cam_path, trace_camera_path = cam_path, build_camera_path = false;
@@ -228,15 +227,15 @@ int main(int argc, char **argv) {
                 if (params.cam_path_output) {
                     cam_path_frame_count = params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count;
                     if (build_camera_path) {
-                        build_path(&path, &params, cam_path_frame_count, cam_translation, cam_rotation);
+                        build_path(cam_path, &params, cam_path_frame_count, cam_translation, cam_rotation);
                         scale_vec_ip(cam_path_fps_scale, &cam_translation);
                         scale_vec_ip(cam_path_fps_scale, &cam_rotation);
                         if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
                             build_camera_path = false;
-                            finish_path(&path, &params, cam_path_frame_count);
+                            finish_path(cam_path, &params, cam_path_frame_count);
                             FILE* cam_path_file = fopen(params.cam_path_output, params.append_cam_path ? "a" : "w");
                             if (params.append_cam_path) fputc('\n', cam_path_file);
-                            write_path(&path, params.cam_path_framerate, cam_path_file);
+                            write_path(cam_path, params.cam_path_framerate, cam_path_file);
                             fclose(cam_path_file);
                             printf("[*] Saved camera path with %d frames to %s\n", cam_path_frame_count, params.cam_path_output);
                         }
@@ -244,7 +243,7 @@ int main(int argc, char **argv) {
                         printf("[*] Recording camera path...\n");
                         build_camera_path = true;
                         cam_path_frame_offset = frame_count;
-                        init_path(&path, &params, cam_path_frame_count, cam_translation, cam_rotation);
+                        init_path(&cam_path, &params, cam_path_frame_count, cam_translation, cam_rotation);
                     }
                 }
             }
@@ -275,6 +274,7 @@ repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path =
         } while (++frame_count < params.num_frames);
     }
     
+    if (cam_path) free_path(cam_path);
     clean_device();
     if (params.use_opengl) clean_opengl();
     else postprocess_jpeg_cleanup(&fb, &js);

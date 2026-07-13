@@ -31,9 +31,9 @@ struct PitchPathNode {
 typedef struct PitchPathNode PitchPathNode;
 
 typedef struct {
-    PositionPathNode *pos_path, *pos_path_end;
-    PitchPathNode *pitch_path, *pitch_path_end;
-    RotationPathNode *yaw_path, *roll_path, *yaw_path_end, *roll_path_end;
+    PositionPathNode *pos_path, *pos_path_start, *pos_path_end;
+    PitchPathNode *pitch_path, *pitch_path_start, *pitch_path_end;
+    RotationPathNode *yaw_path, *roll_path, *yaw_path_start, *roll_path_start, *yaw_path_end, *roll_path_end;
 } CameraPath;
 
 #endif

@@ -289,7 +289,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
         *camera_path = (CameraPath*) malloc(sizeof(CameraPath));
         CameraPathNode* pos_node = parsed_scene->path.lists[POS_LIST];
         if (pos_node) {
-            (*camera_path)->pos_path_end = (*camera_path)->pos_path = (PositionPathNode*) malloc(sizeof(PositionPathNode));
+            (*camera_path)->pos_path_end = (*camera_path)->pos_path_start = (*camera_path)->pos_path = (PositionPathNode*) malloc(sizeof(PositionPathNode));
             (*camera_path)->pos_path_end->next = NULL;
             do {
                 bool pos_set = false, translation_set = false, frame_set = false;
@@ -324,11 +324,11 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
                 }
             } while (pos_node);
         } else {
-            (*camera_path)->pos_path_end = (*camera_path)->pos_path = NULL;
+            (*camera_path)->pos_path_end = (*camera_path)->pos_path_start = (*camera_path)->pos_path = NULL;
         }
         CameraPathNode* pitch_node = parsed_scene->path.lists[PITCH_LIST];
         if (pitch_node) {
-            (*camera_path)->pitch_path_end = (*camera_path)->pitch_path = (PitchPathNode*) malloc(sizeof(PitchPathNode));
+            (*camera_path)->pitch_path_end = (*camera_path)->pitch_path_start = (*camera_path)->pitch_path = (PitchPathNode*) malloc(sizeof(PitchPathNode));
             (*camera_path)->pitch_path_end->next = NULL;
             do {
                 bool dir_set = false, up_set = false, pitch_set = false, frame_set = false;
@@ -367,11 +367,11 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
                 }
             } while (pitch_node);
         } else {
-            (*camera_path)->pitch_path_end = (*camera_path)->pitch_path = NULL;
+            (*camera_path)->pitch_path_end = (*camera_path)->pitch_path_start = (*camera_path)->pitch_path = NULL;
         }
         CameraPathNode* yaw_node = parsed_scene->path.lists[YAW_LIST];
         if (yaw_node) {
-            (*camera_path)->yaw_path_end = (*camera_path)->yaw_path = (RotationPathNode*) malloc(sizeof(RotationPathNode));
+            (*camera_path)->yaw_path_end = (*camera_path)->yaw_path_start = (*camera_path)->yaw_path = (RotationPathNode*) malloc(sizeof(RotationPathNode));
             (*camera_path)->yaw_path_end->next = NULL;
             do {
                 bool dir_set = false, rotation_set = false, frame_set = false;
@@ -406,11 +406,11 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
                 }
             } while (yaw_node);
         } else {
-            (*camera_path)->yaw_path_end = (*camera_path)->yaw_path = NULL;
+            (*camera_path)->yaw_path_end = (*camera_path)->yaw_path_start = (*camera_path)->yaw_path = NULL;
         }
         CameraPathNode* roll_node = parsed_scene->path.lists[ROLL_LIST];
         if (roll_node) {
-            (*camera_path)->roll_path_end = (*camera_path)->roll_path = (RotationPathNode*) malloc(sizeof(RotationPathNode));
+            (*camera_path)->roll_path_end = (*camera_path)->roll_path_start = (*camera_path)->roll_path = (RotationPathNode*) malloc(sizeof(RotationPathNode));
             (*camera_path)->roll_path_end->next = NULL;
             do {
                 bool dir_set = false, rotation_set = false, frame_set = false;
@@ -445,7 +445,7 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
                 }
             } while (roll_node);
         } else {
-            (*camera_path)->roll_path_end = (*camera_path)->roll_path = NULL;
+            (*camera_path)->roll_path_end = (*camera_path)->roll_path_start = (*camera_path)->roll_path = NULL;
         }
         if (parsed_scene->path.fps) params->cam_path_framerate = parsed_scene->path.fps;
     } else {
