@@ -470,7 +470,7 @@ Scene_t* make_scene(Definition_t definition) {
             break;
         case CAM_PATH:
             if (scene->path_set) {
-                fputs("[!] Multiple camera paths defined", stderr);
+                fputs("[!] Multiple camera paths defined\n", stderr);
                 exit(EXIT_FAILURE);
             }
             scene->path = definition.cam_path;
@@ -492,7 +492,7 @@ Scene_t* append_scene(Scene_t* scene, Definition_t definition) {
             break;
         case CAM_PATH:
             if (scene->path_set) {
-                fputs("[!] Multiple camera paths defined", stderr);
+                fputs("[!] Multiple camera paths defined\n", stderr);
                 exit(EXIT_FAILURE);
             }
             scene->path = definition.cam_path;
