@@ -31,6 +31,7 @@ typedef struct {
     char* nvjpeg_output;
     bool use_cam_path, append_cam_path, complete_cam_path;
     char* cam_path_output;
+    int cam_path_framerate;
 } RenderParameters;
 
 extern void init_params(RenderParameters* params);

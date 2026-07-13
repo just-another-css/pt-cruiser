@@ -107,6 +107,8 @@ void process_help_arg(int argc, char** argv) {
                    "    -ncp,  --no-camera-path <file>    Ignore any camera paths in SDL file\n"
                    "    -ccp,  --complete-camera-path   Override frame cap to render at least all\n"
                    "                                    frames in loaded camera path\n"
+                   "    -pfr,  --path-framerate         Set camera path framerate for loaded and\n"
+                   "                                    recorded paths (0 for no set value)\n"
                    "    -acp,  --append-camera-path     Append camera path to loaded SDL file\n"
                    "    -wcp,  --write-camera-path <file>     Overwrite given file with camera path\n"
                    "    -xf,   --x-fov <float>          Set x/horizontal field of view\n"
@@ -184,6 +186,7 @@ void process_args(int argc, char** argv, RenderParameters* params) {
         else if (!strcmp(argv[i] + 1, "rspd") || !strcmp(argv[i] + 1, "-camera-rot-speed")) process_float_arg(argc, argv, &i, &params->cam_rotation_speed, 0, FLT_MAX);
         else if (!strcmp(argv[i] + 1, "ncp") || !strcmp(argv[i] + 1, "-no-camera-path")) params->use_cam_path = false;
         else if (!strcmp(argv[i] + 1, "ccp") || !strcmp(argv[i] + 1, "-complete-camera-path")) params->complete_cam_path = true;
+        else if (!strcmp(argv[i] + 1, "pfr") || !strcmp(argv[i] + 1, "-path-framerate")) process_int_arg(argc, argv, &i, &params->cam_path_framerate, 0, INT_MAX);
         else if (!strcmp(argv[i] + 1, "acp") || !strcmp(argv[i] + 1, "-append-camera-path")) {
             if (write_cam_path_set) {
                 fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -wcp/--write-camera-path\n", argv[i]);

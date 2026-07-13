@@ -475,6 +475,7 @@ void init_params(RenderParameters* params) {
         .append_cam_path = false,
         .complete_cam_path = false,
         .cam_path_output = NULL,
+        .cam_path_framerate = 0,
     };
 }
 
