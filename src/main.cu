@@ -195,7 +195,6 @@ int main(int argc, char **argv) {
 
     int frame_count = 0;
     bool loaded_camera_path = cam_path, trace_camera_path = cam_path, build_camera_path = false;
-    int cam_path_frame_offset = 0;
     if (loaded_camera_path) {
         printf("[*] Tracing camera path...\n");
         start_trace_path(cam_path, &params);
@@ -204,7 +203,7 @@ int main(int argc, char **argv) {
     bool use_frametime = params.show_frametime || params.cam_path_framerate;
     float frametime, cam_path_frametime = 1000.0 / params.cam_path_framerate, cam_path_fps_scale = 1;
     frametime = cam_path_frametime;
-    int cam_path_frame_count;
+    int cam_path_frame_offset = 0, cam_path_frame_count;
     if (params.cam_path_framerate) {
         timespec_get(&start, TIME_UTC);
         if (params.show_frametime) prev = start;
@@ -214,7 +213,7 @@ int main(int argc, char **argv) {
         while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count || (trace_camera_path && params.complete_cam_path))) {
             if (loaded_camera_path) {
                 if (trace_camera_path) {
-                    trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path);
+                    trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : (frame_count - cam_path_frame_offset), cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path);
                     if (!trace_camera_path) printf("[*] Camera path completed at frame %d\n", frame_count);
                     else {
                         trace_camera_path = glfwGetKey(window, GLFW_KEY_H) != GLFW_PRESS;
@@ -225,7 +224,7 @@ int main(int argc, char **argv) {
             if (!trace_camera_path) {
                 get_key_input(window, &params, &cam_translation, &cam_rotation);
                 if (params.cam_path_output) {
-                    cam_path_frame_count = params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count;
+                    cam_path_frame_count = params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : (frame_count - cam_path_frame_offset);
                     if (build_camera_path) {
                         build_path(cam_path, &params, cam_path_frame_count, cam_translation, cam_rotation);
                         scale_vec_ip(cam_path_fps_scale, &cam_translation);
@@ -243,7 +242,8 @@ int main(int argc, char **argv) {
                         printf("[*] Recording camera path...\n");
                         build_camera_path = true;
                         cam_path_frame_offset = frame_count;
-                        init_path(&cam_path, &params, cam_path_frame_count, cam_translation, cam_rotation);
+                        if (params.cam_path_framerate) timespec_get(&start, TIME_UTC);
+                        init_path(&cam_path, &params, cam_translation, cam_rotation);
                     }
                 }
             }
@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {
         do {
-repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, frame_count - cam_path_frame_offset, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
+repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
             render_frame(params, params.nvjpeg_output);
             if (use_frametime) {
                 calc_frametime(&prev, &cur, &frametime, params.show_frametime);

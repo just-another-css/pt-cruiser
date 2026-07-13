@@ -5,7 +5,7 @@
 #include "scene_processing.h"
 
 extern void move_cam(RenderParameters* params, float3 translation, float3 rotation);
-extern void init_path(CameraPath** path, RenderParameters* params, int frame, float3 translation, float3 rotation);
+extern void init_path(CameraPath** path, RenderParameters* params, float3 translation, float3 rotation);
 extern void build_path(CameraPath* path, RenderParameters* params, int frame, float3 translation, float3 rotation);
 extern void finish_path(CameraPath* path, RenderParameters* params, int frame_count);
 extern void start_trace_path(CameraPath* path, RenderParameters* params);

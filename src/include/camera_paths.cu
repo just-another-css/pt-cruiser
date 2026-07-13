@@ -24,13 +24,12 @@ void move_cam(RenderParameters* params, float3 translation, float3 rotation) {
     }
 }
 
-void init_path(CameraPath** path, RenderParameters* params, int frame, float3 translation, float3 rotation) {
+void init_path(CameraPath** path, RenderParameters* params, float3 translation, float3 rotation) {
     *path = (CameraPath*) malloc(sizeof(CameraPath));
     PositionPathNode* pos_node = (PositionPathNode*) malloc(sizeof(PositionPathNode));
     *pos_node = (PositionPathNode) {
         .pos = params->cam_pos,
         .translation = translation,
-        .frame = frame,
     };
     (*path)->pos_path_start = (*path)->pos_path_end = (*path)->pos_path = pos_node;
     PitchPathNode* pitch_node = (PitchPathNode*) malloc(sizeof(PitchPathNode));
@@ -38,21 +37,18 @@ void init_path(CameraPath** path, RenderParameters* params, int frame, float3 tr
         .dir = params->cam_dir,
         .up = params->cam_up,
         .pitch = rotation.x,
-        .frame = frame,
     };
     (*path)->pitch_path_start = (*path)->pitch_path_end = (*path)->pitch_path = pitch_node;
     RotationPathNode* yaw_node = (RotationPathNode*) malloc(sizeof(RotationPathNode));
     *yaw_node = (RotationPathNode) {
         .vec = params->cam_dir,
         .rotation = rotation.y,
-        .frame = frame,
     };
     (*path)->yaw_path_start = (*path)->yaw_path_end = (*path)->yaw_path = yaw_node;
     RotationPathNode* roll_node = (RotationPathNode*) malloc(sizeof(RotationPathNode));
     *roll_node = (RotationPathNode) {
         .vec = params->cam_up,
         .rotation = rotation.z,
-        .frame = frame,
     };
     (*path)->roll_path_start = (*path)->roll_path_end = (*path)->roll_path = roll_node;
 }
