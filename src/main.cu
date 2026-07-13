@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
                             finish_path(&path, &params, cam_path_frame_count);
                             FILE* cam_path_file = fopen(params.cam_path_output, params.append_cam_path ? "a" : "w");
                             if (params.append_cam_path) fputc('\n', cam_path_file);
-                            write_path(&path, cam_path_file);
+                            write_path(&path, params.cam_path_framerate, cam_path_file);
                             fclose(cam_path_file);
                             printf("[*] Saved camera path with %d frames to %s\n", cam_path_frame_count, params.cam_path_output);
                         }

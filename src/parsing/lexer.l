@@ -60,6 +60,7 @@ WS          [ \t\r]+
 "up"                { return TOK_UP; }
 "tran"              { return TOK_TRANSLATION; }
 "rot"               { return TOK_ROTATION; }
+"fps"               { return TOK_FPS; }
 
 {INT}               {
                         yylval.ival = atoi(yytext);

@@ -22,6 +22,7 @@ typedef enum {
     TOK_UP,
     TOK_TRANSLATION,
     TOK_ROTATION,
+    TOK_FPS,
 
     // Numbers
     TOK_INT,

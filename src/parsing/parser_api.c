@@ -375,12 +375,35 @@ CameraPathList make_path_list(CameraPathListType type, CameraPathNode* list) {
 CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list);
 
 CameraPath_t make_cam_path(CameraPathList list) {
-    CameraPath_t path = (CameraPath_t) calloc(NUM_CAM_PATH_LISTS, sizeof(CameraPathNode*));
+    CameraPath_t path = (CameraPath_t) { 
+        .lists = calloc(NUM_CAM_PATH_LISTS, sizeof(CameraPathNode*)),
+    };
     return append_cam_path(path, list);
 }
 
+static inline void check_path_fps(int fps) {
+    if (!fps) {
+        fputs("[!] Camera path fps cannot be zero", stderr);
+        exit(EXIT_FAILURE);
+    }
+}
+
+CameraPath_t make_cam_path_fps(int fps) {
+    check_path_fps(fps);
+    return (CameraPath_t) {
+        .lists = calloc(NUM_CAM_PATH_LISTS, sizeof(CameraPathNode*)),
+        .fps = fps,
+    };
+}
+
 CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list) {
-    path[list.type] = list.list;
+    path.lists[list.type] = list.list;
+    return path;
+}
+
+CameraPath_t set_cam_path_fps(CameraPath_t path, int fps) {
+    check_path_fps(fps);
+    path.fps = fps;
     return path;
 }
 
@@ -422,7 +445,7 @@ static Scene_t* init_scene() {
     make_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, LIST_INITIAL_CAPACITY, sizeof(Obj_t));
     make_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, LIST_INITIAL_CAPACITY, sizeof(Mat_t));
     make_list(&scene->params, &scene->param_len, &scene->param_capacity, LIST_INITIAL_CAPACITY, sizeof(Param_t));
-    scene->path = NULL;
+    scene->path.lists = NULL;
     scene->path_set = false;
     return scene;
 }

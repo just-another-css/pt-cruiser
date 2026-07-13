@@ -100,7 +100,7 @@ void finish_path(CameraPath* path, RenderParameters* params, int frame_count) {
     build_path(path, params, frame_count, make_float3(0,0,0), make_float3(0,0,0));
 }
 
-void write_path(CameraPath* path, FILE* output) {
+void write_path(CameraPath* path, int path_fps, FILE* output) {
     fputs("camera_path: { cam = [", output);
     // Write position path
     PositionPathNode* pos_path = path->pos_path;
@@ -129,7 +129,8 @@ void write_path(CameraPath* path, FILE* output) {
     while ((roll_path = roll_path->next)) {
         fprintf(output, ", { frame = %d, up = (%f,%f,%f), rot = %f }", roll_path->frame, roll_path->vec.x, roll_path->vec.y, roll_path->vec.z, roll_path->rotation);
     }
-    fputs("] }", output);
+    if (path_fps) fprintf(output, "], fps = %d }", path_fps);
+    else fputs("] }", output);
 }
 
 void start_trace_path(CameraPath* path, RenderParameters* params) {

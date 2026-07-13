@@ -164,7 +164,10 @@ typedef struct {
 
 #define NUM_CAM_PATH_LISTS 4
 
-typedef CameraPathNode** CameraPath_t;
+typedef struct {
+    CameraPathNode** lists; // if lists is NULL, path has not been set
+    int fps;
+} CameraPath_t;
 
 typedef enum {
     OBJECT,
@@ -255,7 +258,9 @@ extern CameraPathNode* append_cam_path_node(CameraPathNode* list, CameraPathNode
 extern CameraPathList make_path_list(CameraPathListType type, CameraPathNode* list);
 
 extern CameraPath_t make_cam_path(CameraPathList list);
+extern CameraPath_t make_cam_path_fps(int fps);
 extern CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list);
+extern CameraPath_t set_cam_path_fps(CameraPath_t path, int fps);
 
 extern Definition_t union_obj(Obj_t obj);
 extern Definition_t union_mat(Mat_t mat);
