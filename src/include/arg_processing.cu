@@ -107,7 +107,7 @@ void process_help_arg(int argc, char** argv) {
                    "    -ncp,  --no-camera-path <file>    Ignore any camera paths in SDL file\n"
                    "    -ccp,  --complete-camera-path   Override frame cap to render at least all\n"
                    "                                    frames in loaded camera path\n"
-                   "    -pfr,  --path-framerate         Set camera path framerate for loaded and\n"
+                   "    -pfr,  --path-framerate <int>   Set camera path framerate for loaded and\n"
                    "                                    recorded paths (0 for no set value)\n"
                    "    -acp,  --append-camera-path     Append camera path to loaded SDL file\n"
                    "    -wcp,  --write-camera-path <file>     Overwrite given file with camera path\n"
