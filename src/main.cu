@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
     float3 cam_translation, cam_rotation;
 
     int frame_count = 0;
-    bool loaded_camera_path = cam_path, trace_camera_path = loaded_camera_path && params.start_cam_path, build_camera_path = false;
+    bool loaded_camera_path = cam_path && params.use_cam_path, trace_camera_path = loaded_camera_path && params.start_cam_path, build_camera_path = false;
     if (trace_camera_path) {
         printf("[*] Tracing camera path...\n");
         start_trace_path(cam_path, &params);
