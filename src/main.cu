@@ -267,7 +267,7 @@ int main(int argc, char **argv) {
         if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {
         do {
-repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
+repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
             render_frame(params, params.nvjpeg_output);
             if (use_frametime) {
                 calc_frametime(&prev, &cur, &frametime, params.show_frametime);
