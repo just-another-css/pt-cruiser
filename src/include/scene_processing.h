@@ -17,7 +17,7 @@
 #define RAY_BOUNCE_LIMIT 16
 #define TILE_PIXELS 262144 // 2^18
 
-#define NO_FRAME_LIMIT -1
+#define NO_FRAME_LIMIT 0
 #define NVJPEG_IMAGE_QUALITY 90
 
 typedef struct {

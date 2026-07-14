@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
     } else if (params.show_frametime) timespec_get(&prev, TIME_UTC);
     if (params.use_opengl) {
         char* nvjpeg_frame_output = params.nvjpeg_last ? NULL : params.nvjpeg_output; // do not save every frame if nvjpeg_last set
-        while (!glfwWindowShouldClose(window) && (frame_count != params.num_frames || !frame_count || (trace_camera_path && params.complete_cam_path))) {
+        while (!glfwWindowShouldClose(window) && (!params.num_frames || frame_count < params.num_frames || (trace_camera_path && params.complete_cam_path) || !frame_count)) {
             if (loaded_camera_path) {
                 if (trace_camera_path) {
                     trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : (frame_count - cam_path_frame_offset), cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path);
