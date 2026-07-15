@@ -85,6 +85,7 @@ void process_help_arg(int argc, char** argv) {
                 !(!strcmp(argv[i - 1] + 1, "i") || !strcmp(argv[i - 1] + 1, "-image") || !strcmp(argv[i - 1] + 1, "ri")
                 || !strcmp(argv[i - 1] + 1, "wcp") || !strcmp(argv[i - 1] + 1, "-write-camera-path"))) return;
         if (!strcmp(argv[i] + 1, "h") || !strcmp(argv[i] + 1, "-help")) {
+            float3 default_cam_pos = CAM_POS, default_cam_dir = CAM_DIR, default_cam_up = CAM_UP;
             printf("Path Tracing CUDA Renderer with User Interface and Syntactic Entity\nRepresentation (PT CRUISER)\n\n"
                    "Usage: %s [\033[3moptions\033[0m [--]] <\033[3mSDL input...\033[0m>\n"
                    " \033[1mOPTIONS:\033[0m                                                                       \n"
@@ -103,7 +104,7 @@ void process_help_arg(int argc, char** argv) {
                    "    -ri \033[3mFILE\033[0m                        Equivalent to '-r -i \033[3mFILE\033[0m'\n"
                    "  Rendering:\n"
                    "    -nf,   --num-frames \033[3mINT\033[0m         Set a cap on the number of frames rendered\n"
-                   "                                    (0 for unlimited) (default: %d)\n"
+                   "                                    (default: %d; 0: unlimited)\n"
                    "    -ft,   --show-frametime         Print the frametime and FPS for every frame\n"
                    "    -nb,   --no-bloom               Disable bloom postprocessing\n"
                    "    -nd,   --no-denoising           Disable denoising postprocessing\n"
@@ -115,9 +116,9 @@ void process_help_arg(int argc, char** argv) {
                    "    -rbl,  --ray-bounce-limit \033[3mINT\033[0m   Set pathtracing ray bounce limit (%d)\n"
                    "    -ppt,  --pixels-per-tile \033[3mINT\033[0m    Set number of pixels in each tile (%d)\n"
                    "  Camera & Camera Paths:\n"
-                   "    -cam,  --camera-position \033[3mX Y Z\033[0m    Set initial camera position\n"
-                   "    -dir,  --camera-direction \033[3mX Y Z\033[0m   Set initial camera direction vector\n"
-                   "    -up,   --camera-up \033[3mX Y Z\033[0m          Set initial camera up vector\n"
+                   "    -cam,  --camera-position \033[3mX Y Z\033[0m    Set initial camera position (%.0f,%.0f,%.0f)\n"
+                   "    -dir,  --camera-direction \033[3mX Y Z\033[0m   Set initial camera direction (%.0f,%.0f,%.0f)\n"
+                   "    -up,   --camera-up \033[3mX Y Z\033[0m          Set initial camera up vector (%.0f,%.0f,%.0f)\n"
                    "    -spd,  --camera-speed \033[3mFLOAT\033[0m       Set camera movement speed (%.2f)\n"
                    "    -rspd, --camera-rot-speed \033[3mFLOAT\033[0m   Set camera rotation speed (%.2f)\n"
                    "    -ncp,  --no-camera-path \033[3mFILE\033[0m    Ignore any camera paths in SDL file\n"
@@ -125,13 +126,15 @@ void process_help_arg(int argc, char** argv) {
                    "    -ccp,  --complete-camera-path   Override frame cap to render at least all\n"
                    "                                    frames in loaded camera path\n"
                    "    -pfr,  --path-framerate \033[3mINT\033[0m     Set camera path framerate for loaded and\n"
-                   "                                    recorded paths (0 for none set) (default: %d)\n"
+                   "                                    recorded paths (default: %d; 0: none set)\n"
                    "    -acp,  --append-camera-path     Append camera path to loaded SDL file\n"
                    "    -wcp,  --write-camera-path \033[3mFILE\033[0m   Overwrite given file with camera path\n"
                    " \033[1mOPERANDS:\033[0m\n"
                    "    <SDL input...>                  SDL (.sdl) file(s) defining a scene\n"
                    "\n\033[3mDefault values in parentheses, e.g. (10); vector components are float values\033[0m\n\n", argv[0],
-                   NVJPEG_IMAGE_QUALITY, NO_FRAME_LIMIT, X_RES, Y_RES, X_FOV, Y_FOV, PIXEL_RAY_GRID_DIM, RAY_BOUNCE_LIMIT, TILE_PIXELS, (float) CAM_SPEED, (float) CAM_ROTATION_SPEED, NO_PATH_FRAMERATE
+                   NVJPEG_IMAGE_QUALITY, NO_FRAME_LIMIT, X_RES, Y_RES, X_FOV, Y_FOV, PIXEL_RAY_GRID_DIM, RAY_BOUNCE_LIMIT, TILE_PIXELS,
+                   default_cam_pos.x, default_cam_pos.y, default_cam_pos.z, default_cam_dir.x, default_cam_dir.y, default_cam_dir.z, default_cam_up.x, default_cam_up.y, default_cam_up.z,
+                   (float) CAM_SPEED, (float) CAM_ROTATION_SPEED, NO_PATH_FRAMERATE
             );
             exit(EXIT_SUCCESS);
         }
