@@ -147,6 +147,12 @@ static float time_diff(struct timespec start, struct timespec end) {
     return (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_nsec - start.tv_nsec) / 1000000.0;
 }
 
+static float time_since(struct timespec start) {
+    struct timespec now;
+    timespec_get(&now, TIME_UTC);
+    return time_diff(start, now);
+}
+
 static void calc_frametime(struct timespec* prev, struct timespec* cur, float* frametime, bool show_frametime) {
     timespec_get(cur, TIME_UTC);
     *frametime = time_diff(*prev, *cur);
@@ -199,11 +205,15 @@ int main(int argc, char **argv) {
         printf("[*] Tracing camera path...\n");
         start_trace_path(cam_path, &params);
     }
-    struct timespec start, prev, cur;
+    struct timespec start, prev, cur, paused_start;
     bool use_frametime = params.show_frametime || params.cam_path_framerate;
     float frametime, cam_path_frametime = 1000.0 / params.cam_path_framerate, cam_path_fps_scale = 1;
     frametime = cam_path_frametime;
     int cam_path_frame_offset = 0, cam_path_frame_count;
+    bool path_paused = false;
+    float3 path_cam_pos, path_cam_dir, path_cam_up; // preserve cam pos/dir/up when pausing cam path
+    float cum_path_paused = 0;
+    int paused_start_frame = 0;
     if (params.cam_path_framerate && trace_camera_path) {
         timespec_get(&start, TIME_UTC);
         if (params.show_frametime) prev = start;
@@ -213,18 +223,45 @@ int main(int argc, char **argv) {
         while (!glfwWindowShouldClose(window) && (!params.num_frames || frame_count < params.num_frames || (trace_camera_path && params.complete_cam_path) || !frame_count)) {
             if (loaded_camera_path) {
                 if (trace_camera_path) {
-                    trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : (frame_count - cam_path_frame_offset), cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path);
+trace:              trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? ((time_diff(start, prev) - cum_path_paused) / cam_path_frametime) : (frame_count - cam_path_frame_offset), cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path);
                     if (!trace_camera_path) printf("[*] Camera path completed at frame %d\n", frame_count);
                     else {
                         trace_camera_path = glfwGetKey(window, GLFW_KEY_H) != GLFW_PRESS;
                         if (!trace_camera_path) printf("[*] Camera path aborted\n");
+                        else if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS) {
+                            printf("[*] Pausing camera path\n");
+                            path_cam_pos = params.cam_pos;
+                            path_cam_dir = params.cam_dir;
+                            path_cam_up = params.cam_up;
+                            cam_translation = make_float3(0,0,0);
+                            cam_rotation = make_float3(0,0,0);
+                            path_paused = true;
+                            trace_camera_path = false;
+                            if (params.cam_path_framerate) timespec_get(&paused_start, TIME_UTC);
+                            else paused_start_frame = frame_count;
+                        }
                     }
-                } else if (glfwGetKey(window, GLFW_KEY_Y) == GLFW_PRESS && !build_camera_path) {
-                    printf("[*] Tracing camera path...\n");
-                    trace_camera_path = true;
-                    cam_path_frame_offset = frame_count;
-                    if (params.cam_path_framerate) timespec_get(&start, TIME_UTC);
-                    start_trace_path(cam_path, &params);
+                } else if (!build_camera_path) {
+                    if (glfwGetKey(window, GLFW_KEY_Y) == GLFW_PRESS) {
+                        printf("[*] Tracing camera path...\n");
+                        trace_camera_path = true;
+                        cam_path_frame_offset = frame_count;
+                        if (params.cam_path_framerate) { 
+                            timespec_get(&start, TIME_UTC);
+                            cum_path_paused = 0;
+                        } else cam_path_frame_offset += frame_count - paused_start_frame;
+                        start_trace_path(cam_path, &params);
+                    } else if (path_paused && glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS) {
+                        printf("[*] Resuming camera path\n");
+                        params.cam_pos = path_cam_pos;
+                        params.cam_dir = path_cam_dir;
+                        params.cam_up = path_cam_up;
+                        path_paused = false;
+                        trace_camera_path = true;
+                        if (params.cam_path_framerate) cum_path_paused += time_since(paused_start);
+                        else cam_path_frame_offset += frame_count - paused_start_frame;
+                        goto trace;
+                    }
                 }
             }
             if (!trace_camera_path) {
