@@ -167,22 +167,13 @@ int main(int argc, char **argv) {
     }
     process_help_arg(argc, argv);
     
-    init_parsing();
-    FILE *input_fp = fopen(argv[1], "r");
-    if (!input_fp) {
-        fprintf(stderr, "[!] Error: Cannot open file %s\n", argv[1]);
-        return EXIT_FAILURE;
-    }
     int num_objects;
     PointsMesh* meshes;
     RenderParameters params;
     CameraPath* cam_path;
-    init_params(&params);
-    parse_file(input_fp, &num_objects, &meshes, &params, &cam_path);
-    puts("[+] Successfully parsed provided SDL file");
-    fclose(input_fp);
-
-    process_args(argc, argv, &params);
+    init_parsing(&params);
+    process_args(argc, argv, &params, &num_objects, &meshes, &cam_path);
+    puts("[+] Successfully parsed options and SDL input");
 
     if (!params.use_opengl && !params.nvjpeg_output) {
         fputs("[!] No output method provided\n", stderr);

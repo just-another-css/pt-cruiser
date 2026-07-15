@@ -34,8 +34,8 @@ typedef struct {
     int cam_path_framerate;
 } RenderParameters;
 
-extern void init_parsing();
-extern void init_params(RenderParameters* params);
-extern void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params, CameraPath** camera_path);
+extern void init_parsing(RenderParameters* params);
+extern void parse_file(char* filename);
+extern void process_scene(int* num_objects, PointsMesh** meshes, RenderParameters* params, CameraPath** camera_path);
 
 #endif

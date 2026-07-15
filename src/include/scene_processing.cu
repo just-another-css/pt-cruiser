@@ -20,7 +20,55 @@ static float3 vec_to_f3(Vec_t vec) {
 extern FILE *yyin;
 extern int yyerrors;
 
-static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* params, CameraPath** camera_path) {
+void init_parsing(RenderParameters* params) {
+    init_scene();
+    *params = (RenderParameters) {
+        .cam_pos = CAM_POS,
+        .cam_dir = CAM_DIR,
+        .cam_up = CAM_UP,
+        .cam_speed = CAM_SPEED,
+        .cam_rotation_speed = CAM_ROTATION_SPEED,
+        .x_res = X_RES,
+        .y_res = Y_RES,
+        .x_fov = X_FOV,
+        .pixel_ray_grid_dim = PIXEL_RAY_GRID_DIM,
+        .ray_bounce_limit = RAY_BOUNCE_LIMIT,
+        .pixels_per_tile = TILE_PIXELS,
+        .num_frames = NO_FRAME_LIMIT,
+        .image_quality = NVJPEG_IMAGE_QUALITY,
+        .use_opengl = false,
+        .nvjpeg_first = false,
+        .nvjpeg_last = true,
+        .show_frametime = false,
+        .use_denoising = true,
+        .use_bloom = true,
+        .nvjpeg_output = NULL,
+        .use_cam_path = true,
+        .append_cam_path = false,
+        .start_cam_path = false,
+        .complete_cam_path = false,
+        .cam_path_output = NULL,
+        .cam_path_framerate = 0,
+    };
+}
+
+void parse_file(char* filename) {
+    FILE *input_fp = fopen(filename, "r");
+    if (!input_fp) {
+        fprintf(stderr, "[!] Error: Cannot open file '%s'\n", filename);
+        exit(EXIT_FAILURE);
+    }
+    yyin = input_fp;
+    printf("[*] Starting parsing file '%s'...\n", filename);
+    int result = yyparse();
+    if (result || yyerrors) {
+        fprintf(stderr, "[!] Parsing failed with %d errors\n", yyerrors);
+        exit(EXIT_FAILURE);
+    }
+    puts("[*] Finished parsing file");
+}
+
+void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params, CameraPath** camera_path) {
     // Process material names
     char** material_names = (char**) malloc(scene.mat_len * sizeof(char*));
     for (int i = 0; i < scene.mat_len; i++) material_names[i] = scene.materials[i].name;
@@ -453,51 +501,4 @@ static void parse_input(int* num_objects, PointsMesh** mesh, RenderParameters* p
 
     // Free parsed scene struct
     free_scene();
-}
-
-void init_parsing() {
-    init_scene();
-}
-
-void init_params(RenderParameters* params) {
-    *params = (RenderParameters) {
-        .cam_pos = CAM_POS,
-        .cam_dir = CAM_DIR,
-        .cam_up = CAM_UP,
-        .cam_speed = CAM_SPEED,
-        .cam_rotation_speed = CAM_ROTATION_SPEED,
-        .x_res = X_RES,
-        .y_res = Y_RES,
-        .x_fov = X_FOV,
-        .pixel_ray_grid_dim = PIXEL_RAY_GRID_DIM,
-        .ray_bounce_limit = RAY_BOUNCE_LIMIT,
-        .pixels_per_tile = TILE_PIXELS,
-        .num_frames = NO_FRAME_LIMIT,
-        .image_quality = NVJPEG_IMAGE_QUALITY,
-        .use_opengl = false,
-        .nvjpeg_first = false,
-        .nvjpeg_last = true,
-        .show_frametime = false,
-        .use_denoising = true,
-        .use_bloom = true,
-        .nvjpeg_output = NULL,
-        .use_cam_path = true,
-        .append_cam_path = false,
-        .start_cam_path = false,
-        .complete_cam_path = false,
-        .cam_path_output = NULL,
-        .cam_path_framerate = 0,
-    };
-}
-
-void parse_file(FILE* input, int* num_objects, PointsMesh** meshes, RenderParameters* params, CameraPath** camera_path) {
-    yyin = input;
-    puts("[*] Starting parsing...");
-    int result = yyparse();
-    if (result || yyerrors) {
-        fprintf(stderr, "[!] Parsing failed with %d errors!\n", yyerrors);
-        exit(EXIT_FAILURE);
-    }
-    puts("[*] Parsing finished");
-    parse_input(num_objects, meshes, params, camera_path);
 }

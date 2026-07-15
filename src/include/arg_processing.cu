@@ -79,14 +79,13 @@ void process_help_arg(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         if (*argv[i] == '-' && (!strcmp(argv[i] + 1, "h") || !strcmp(argv[i] + 1, "-help"))) {
             printf("Path Tracing CUDA Renderer with User Interface and Syntactic Entity\nRepresentation (PT CRUISER)\n\n"
-                   "Usage: %s <sdl_input> [options]\n"
-                   "  Arguments:\n"
-                   "    <sdl_input>                     SDL (.sdl) file defining a scene\n"
-                   "  Options:                                                                      \n"
+                   "Usage: %s [options [--]] <SDL input...>\n"
+                   " OPTIONS:                                                                      \n"
                    "    -h,    --help                   Print usage information and exit\n"
-                   "    -i,    --image <file>           Provide a path to a JPEG (.jpg/.jpeg) image \n"
+                   "  Output:\n"
+                   "    -i,    --image file             Provide a path to a JPEG (.jpg/.jpeg) image \n"
                    "                                    file to save rendered frames to\n"
-                   "    -iq,   --image-quality <int>    Set image quality [0-100] (default: 90)\n"
+                   "    -iq,   --image-quality int      Set image quality [0-100] (default: 90)\n"
                    "    -fi,   --first-image            Save first frame to image file\n"
                    "    -li,   --last-image             Save last frame to image file (default)\n"
                    "    -ei,   --every-image            Save every frame to image file\n"
@@ -94,31 +93,35 @@ void process_help_arg(int argc, char** argv) {
                    "                                    window and continue rendering until the     \n"
                    "                                    window is closed or a provided frame cap is \n"
                    "                                    reached\n"
-                   "    -ri <file>                      Equivalent to '-r -i <file>'\n"
-                   "    -nf,   --num-frames <int>       Set a cap on the number of frames rendered\n"
+                   "    -ri file                        Equivalent to '-r -i file'\n"
+                   "  Rendering:\n"
+                   "    -nf,   --num-frames int         Set a cap on the number of frames rendered\n"
                    "    -ft,   --show-frametime         Print the frametime and FPS for every frame\n"
                    "    -nb,   --no-bloom               Disable bloom postprocessing\n"
                    "    -nd,   --no-denoising           Disable denoising postprocessing\n"
-                   "    -cam,  --camera-position <x> <y> <z>  Set initial camera position\n"
-                   "    -dir,  --camera-direction <x> <y> <z> Set initial camera direction vector\n"
-                   "    -up,   --camera-up <x> <y> <z>        Set initial camera up vector\n"
-                   "    -spd,  --camera-speed <float>   Set camera movement speed\n"
-                   "    -rspd, --camera-rot-speed <float>     Set camera rotation speed\n"
-                   "    -ncp,  --no-camera-path <file>    Ignore any camera paths in SDL file\n"
+                   "    -xr,   --x-resolution int       Set x/horizontal resolution\n"
+                   "    -yr,   --y-resolution int       Set y/vertical resolution\n"
+                   "    -xf,   --x-fov float            Set x/horizontal field of view\n"
+                   "    -yf,   --y-fov float            Set y/vertical field of view\n"
+                   "    -prgd, --pixel-ray-grid-dim int   Set dimension of pixel ray grids\n"
+                   "    -rbl,  --ray-bounce-limit int   Set pathtracing ray bounce limit\n"
+                   "    -ppt,  --pixels-per-tile int    Set number of pixels in each rendering tile\n"
+                   "  Camera & camera paths:\n"
+                   "    -cam,  --camera-position x y z    Set initial camera position\n"
+                   "    -dir,  --camera-direction x y z   Set initial camera direction vector\n"
+                   "    -up,   --camera-up x y z          Set initial camera up vector\n"
+                   "    -spd,  --camera-speed float       Set camera movement speed\n"
+                   "    -rspd, --camera-rot-speed float   Set camera rotation speed\n"
+                   "    -ncp,  --no-camera-path file    Ignore any camera paths in SDL file\n"
                    "    -scp,  --start-camera-path      Start tracing camera path on first frame\n"
                    "    -ccp,  --complete-camera-path   Override frame cap to render at least all\n"
                    "                                    frames in loaded camera path\n"
-                   "    -pfr,  --path-framerate <int>   Set camera path framerate for loaded and\n"
+                   "    -pfr,  --path-framerate int     Set camera path framerate for loaded and\n"
                    "                                    recorded paths (0 for no set value)\n"
                    "    -acp,  --append-camera-path     Append camera path to loaded SDL file\n"
-                   "    -wcp,  --write-camera-path <file>     Overwrite given file with camera path\n"
-                   "    -xf,   --x-fov <float>          Set x/horizontal field of view\n"
-                   "    -yf,   --y-fov <float>          Set y/vertical field of view\n"
-                   "    -xr,   --x-resolution <int>     Set x/horizontal resolution\n"
-                   "    -yr,   --y-resolution <int>     Set y/vertical resolution\n"
-                   "    -prgd, --pixel-ray-grid-dim <int>     Set dimension of pixel ray grids\n"
-                   "    -rbl,  --ray-bounce-limit <int> Set pathtracing ray bounce limit\n"
-                   "    -ppt,  --pixels-per-tile <int>  Set number of pixels in each rendering tile\n"
+                   "    -wcp,  --write-camera-path file   Overwrite given file with camera path\n"
+                   " OPERANDS:\n"
+                   "    <SDL input...>                  SDL (.sdl) file(s) defining a scene\n"
                    "\n", argv[0]
             );
             exit(EXIT_SUCCESS);
@@ -126,15 +129,16 @@ void process_help_arg(int argc, char** argv) {
     }
 }
 
-void process_args(int argc, char** argv, RenderParameters* params) {
+void process_args(int argc, char** argv, RenderParameters* params, int* num_objects, PointsMesh** meshes, CameraPath** cam_path) {
+    int i = 1;
+
+    // Process options
     bool first_image_set = false, last_image_set = false, every_image_set = false;
     bool append_cam_path_set = false, write_cam_path_set = false;
     bool x_fov_set = false, y_fov_set = false;
-    for (int i = 2; i < argc; i++) {
-        if (*argv[i] != '-') {
-            fprintf(stderr, "[!] Option '%s' is incorrectly formatted\n", argv[i]);
-            exit(EXIT_FAILURE);
-        }
+    for (; i < argc; i++) {
+        if (*argv[i] != '-') break;
+        if (argv[i][1] == '-' && !argv[i][2]) { i++; break; }
         if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, false);
         else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) params->use_opengl = true;
         else if (!strcmp(argv[i] + 1, "ri")) {
@@ -251,4 +255,8 @@ void process_args(int argc, char** argv, RenderParameters* params) {
             exit(EXIT_FAILURE);
         }
     }
+
+    // Process SDL files
+    for (; i < argc; i++) parse_file(argv[i]);
+    process_scene(num_objects, meshes, params, cam_path);
 }
