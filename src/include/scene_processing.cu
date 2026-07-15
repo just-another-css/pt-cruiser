@@ -48,7 +48,7 @@ void init_parsing(RenderParameters* params) {
         .start_cam_path = false,
         .complete_cam_path = false,
         .cam_path_output = NULL,
-        .cam_path_framerate = 0,
+        .cam_path_framerate = NO_PATH_FRAMERATE,
     };
 }
 

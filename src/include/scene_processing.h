@@ -13,12 +13,14 @@
 #define X_RES 3848
 #define Y_RES 2160
 #define X_FOV 1.75
+#define Y_FOV ((float) Y_RES / X_RES) * X_FOV
 #define PIXEL_RAY_GRID_DIM 10
 #define RAY_BOUNCE_LIMIT 16
 #define TILE_PIXELS 262144 // 2^18
 
 #define NO_FRAME_LIMIT 0
 #define NVJPEG_IMAGE_QUALITY 90
+#define NO_PATH_FRAMERATE 0
 
 typedef struct {
     float3 cam_pos, cam_dir, cam_up;
