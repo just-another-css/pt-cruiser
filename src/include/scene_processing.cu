@@ -68,7 +68,7 @@ void parse_file(char* filename) {
     puts("[*] Finished parsing file");
 }
 
-void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params, CameraPath** camera_path) {
+void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params, AssignedRenderParameters* assigned_params, CameraPath** camera_path) {
     // Process material names
     char** material_names = (char**) malloc(scene.mat_len * sizeof(char*));
     for (int i = 0; i < scene.mat_len; i++) material_names[i] = scene.materials[i].name;
@@ -291,32 +291,32 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
         valid = true;
         switch (*scene.params[i].name) {
             case 'x':
-                if (!strcmp(scene.params[i].name + 1, "_res")) params->x_res = scene.params[i].num_value;
-                else if (!strcmp(scene.params[i].name + 1, "_fov")) {
+                if (!strcmp(scene.params[i].name + 1, "_res")) { if (!assigned_params->x_res) params->x_res = scene.params[i].num_value; }
+                else if (!strcmp(scene.params[i].name + 1, "_fov")) { if (!assigned_params->x_fov) {
                     params->x_fov = scene.params[i].num_value;
-                    use_x_fov = true;
+                    use_x_fov = true; }
                 } else valid = false;
                 break;
             case 'y':
-                if (!strcmp(scene.params[i].name + 1, "_res")) params->y_res = scene.params[i].num_value;
-                else if (!strcmp(scene.params[i].name + 1, "_fov")) {
+                if (!strcmp(scene.params[i].name + 1, "_res")) { if (!assigned_params->y_res) params->y_res = scene.params[i].num_value; }
+                else if (!strcmp(scene.params[i].name + 1, "_fov")) { if (!assigned_params->y_fov) {
                     params->y_fov = scene.params[i].num_value;
-                    use_x_fov = false;
+                    use_x_fov = false; }
                 } else valid = false;
                 break;
             case 'p':
-                if (!strcmp(scene.params[i].name + 1, "ixel_ray_grid_dim")) params->pixel_ray_grid_dim = scene.params[i].num_value;
-                else if (!strcmp(scene.params[i].name + 1, "ixels_per_tile")) params->pixels_per_tile = scene.params[i].num_value;
+                if (!strcmp(scene.params[i].name + 1, "ixel_ray_grid_dim")) { if (!assigned_params->pixel_ray_grid_dim) params->pixel_ray_grid_dim = scene.params[i].num_value; }
+                else if (!strcmp(scene.params[i].name + 1, "ixels_per_tile")) { if (!assigned_params->pixels_per_tile) params->pixels_per_tile = scene.params[i].num_value; }
                 else valid = false;
                 break;
             case 'r':
-                if (!strcmp(scene.params[i].name + 1, "ay_bounce_limit")) params->ray_bounce_limit = scene.params[i].num_value;
+                if (!strcmp(scene.params[i].name + 1, "ay_bounce_limit")) { if (!assigned_params->ray_bounce_limit) params->ray_bounce_limit = scene.params[i].num_value; }
                 else valid = false;
                 break;
             case 'c':
-                if (!strcmp(scene.params[i].name + 1, "am_pos")) params->cam_pos = vec_to_f3(scene.params[i].vec_value);
-                else if (!strcmp(scene.params[i].name + 1, "am_dir")) params->cam_dir = vec_to_f3(scene.params[i].vec_value);
-                else if (!strcmp(scene.params[i].name + 1, "am_up")) params->cam_up = vec_to_f3(scene.params[i].vec_value);
+                if (!strcmp(scene.params[i].name + 1, "am_pos")) { if (!assigned_params->cam_pos) params->cam_pos = vec_to_f3(scene.params[i].vec_value); }
+                else if (!strcmp(scene.params[i].name + 1, "am_dir")) { if (!assigned_params->cam_dir) params->cam_dir = vec_to_f3(scene.params[i].vec_value); }
+                else if (!strcmp(scene.params[i].name + 1, "am_up")) { if (!assigned_params->cam_up) params->cam_up = vec_to_f3(scene.params[i].vec_value); }
                 else valid = false;
                 break;
             default:

@@ -34,8 +34,22 @@ typedef struct {
     int cam_path_framerate;
 } RenderParameters;
 
+typedef struct {
+    bool cam_pos, cam_dir, cam_up;
+    bool cam_speed, cam_rotation_speed;
+    bool x_res, y_res;
+    bool x_fov, y_fov;
+    bool pixel_ray_grid_dim, ray_bounce_limit, pixels_per_tile;
+    bool num_frames, image_quality;
+    bool use_opengl, nvjpeg_first, nvjpeg_last, nvjpeg_every, show_frametime, use_denoising, use_bloom;
+    bool nvjpeg_output;
+    bool use_cam_path, append_cam_path, start_cam_path, complete_cam_path;
+    bool cam_path_output;
+    bool cam_path_framerate;
+} AssignedRenderParameters;
+
 extern void init_parsing(RenderParameters* params);
 extern void parse_file(char* filename);
-extern void process_scene(int* num_objects, PointsMesh** meshes, RenderParameters* params, CameraPath** camera_path);
+extern void process_scene(int* num_objects, PointsMesh** meshes, RenderParameters* params, AssignedRenderParameters* assigned_params, CameraPath** camera_path);
 
 #endif

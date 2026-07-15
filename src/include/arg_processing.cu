@@ -3,7 +3,7 @@
 #define MIN_FOV FLT_MIN
 #define MAX_FOV M_PI
 
-static void process_int_arg(int argc, char** argv, int* i, int* value, int min_value, int max_value) {
+static void process_int_arg(int argc, char** argv, int* i, int* value, bool* assigned, int min_value, int max_value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
         fprintf(stderr, "[!] No value provided for option '%s'\n", argv[*i]);
         exit(EXIT_FAILURE);
@@ -18,9 +18,10 @@ static void process_int_arg(int argc, char** argv, int* i, int* value, int min_v
         fprintf(stderr, "[!] Value %d ('%s') for option '%s' is not within permitted range [%d, %d]\n", *value, argv[*i], argv[*i - 1], min_value, max_value);
         exit(EXIT_FAILURE);
     }
+    *assigned = true;
 }
 
-static void process_float_arg(int argc, char** argv, int* i, float* value, float min_value, float max_value) {
+static void process_float_arg(int argc, char** argv, int* i, float* value, bool* assigned, float min_value, float max_value) {
     if (*i + 1 == argc) { // i starts at option; move to first component argument
         fprintf(stderr, "[!] Insufficient values provided for option '%s'\n", argv[*i]);
         exit(EXIT_FAILURE);
@@ -35,9 +36,10 @@ static void process_float_arg(int argc, char** argv, int* i, float* value, float
         fprintf(stderr, "[!] Value %f ('%s') for option '%s' is not within permitted range [%f, %f]\n", *value, argv[*i], argv[*i - 1], min_value, max_value);
         exit(EXIT_FAILURE);
     }
+    *assigned = true;
 }
 
-static void process_float3_args(int argc, char** argv, int* i, float3* value, bool force_nonzero, bool normalise) {
+static void process_float3_args(int argc, char** argv, int* i, float3* value, bool* assigned, bool force_nonzero, bool normalise) {
     float* value_f = &value->x;
     char* endptr;
     for (int j = 0; j < 3; j++) {
@@ -56,9 +58,10 @@ static void process_float3_args(int argc, char** argv, int* i, float3* value, bo
         exit(EXIT_FAILURE);
     }
     if (normalise) norm_vec_ip(value);
+    *assigned = true;
 }
 
-static void process_filepath_arg(int argc, char** argv, int* i, char** filepath, bool check_exists) {
+static void process_filepath_arg(int argc, char** argv, int* i, char** filepath, bool* assigned, bool check_exists) {
     if (++(*i) < argc) {
         *filepath = argv[*i];
         if (check_exists) {
@@ -73,6 +76,7 @@ static void process_filepath_arg(int argc, char** argv, int* i, char** filepath,
         fprintf(stderr, "[!] No file provided with option '%s'\n", argv[*i - 1]);
         exit(EXIT_FAILURE);
     }
+    *assigned = true;
 }
 
 void process_help_arg(int argc, char** argv) {
@@ -136,14 +140,20 @@ void process_args(int argc, char** argv, RenderParameters* params, int* num_obje
     bool first_image_set = false, last_image_set = false, every_image_set = false;
     bool append_cam_path_set = false, write_cam_path_set = false;
     bool x_fov_set = false, y_fov_set = false;
+    AssignedRenderParameters assigned_params = (AssignedRenderParameters) {}; // zero/false-init
     for (; i < argc; i++) {
         if (*argv[i] != '-') break;
         if (argv[i][1] == '-' && !argv[i][2]) { i++; break; }
-        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, false);
-        else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) params->use_opengl = true;
+        if (!strcmp(argv[i] + 1, "i") || !strcmp(argv[i] + 1, "-image")) process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, &assigned_params.nvjpeg_output, false);
+        else if (!strcmp(argv[i] + 1, "r") || !strcmp(argv[i] + 1, "-realtime")) {
+            params->use_opengl = true;
+            assigned_params.use_opengl = true;
+        }
         else if (!strcmp(argv[i] + 1, "ri")) {
             params->use_opengl = true;
-            process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, false);
+            assigned_params.use_opengl = true;
+            process_filepath_arg(argc, argv, &i, &params->nvjpeg_output, &assigned_params.nvjpeg_output, false);
+            assigned_params.nvjpeg_output = true;
         }
         else if (!strcmp(argv[i] + 1, "fi") || !strcmp(argv[i] + 1, "-first-image")) {
             if (!last_image_set && !every_image_set) {
@@ -181,18 +191,36 @@ void process_args(int argc, char** argv, RenderParameters* params, int* num_obje
                 exit(EXIT_FAILURE);
             }
         }
-        else if (!strcmp(argv[i] + 1, "ft") || !strcmp(argv[i] + 1, "-show-frametime")) params->show_frametime = true;
-        else if (!strcmp(argv[i] + 1, "nb") || !strcmp(argv[i] + 1, "-no-bloom")) params->use_bloom = false;
-        else if (!strcmp(argv[i] + 1, "nd") || !strcmp(argv[i] + 1, "-no-denoising")) params->use_denoising = false;
-        else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, &params->cam_pos, false, false);
-        else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, true, true);
-        else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, true, true);
-        else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, 0, FLT_MAX);
-        else if (!strcmp(argv[i] + 1, "rspd") || !strcmp(argv[i] + 1, "-camera-rot-speed")) process_float_arg(argc, argv, &i, &params->cam_rotation_speed, 0, FLT_MAX);
-        else if (!strcmp(argv[i] + 1, "ncp") || !strcmp(argv[i] + 1, "-no-camera-path")) params->use_cam_path = false;
-        else if (!strcmp(argv[i] + 1, "scp") || !strcmp(argv[i] + 1, "-start-camera-path")) params->start_cam_path = true;
-        else if (!strcmp(argv[i] + 1, "ccp") || !strcmp(argv[i] + 1, "-complete-camera-path")) params->complete_cam_path = true;
-        else if (!strcmp(argv[i] + 1, "pfr") || !strcmp(argv[i] + 1, "-path-framerate")) process_int_arg(argc, argv, &i, &params->cam_path_framerate, 0, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "ft") || !strcmp(argv[i] + 1, "-show-frametime")) {
+            params->show_frametime = true;
+            assigned_params.show_frametime = true;
+        }
+        else if (!strcmp(argv[i] + 1, "nb") || !strcmp(argv[i] + 1, "-no-bloom")) {
+            params->use_bloom = false;
+            assigned_params.use_bloom = true;
+        }
+        else if (!strcmp(argv[i] + 1, "nd") || !strcmp(argv[i] + 1, "-no-denoising")) {
+            params->use_denoising = false;
+            assigned_params.use_denoising = true;
+        }
+        else if (!strcmp(argv[i] + 1, "cam") || !strcmp(argv[i] + 1, "-camera-position")) process_float3_args(argc, argv, &i, &params->cam_pos, &assigned_params.cam_pos, false, false);
+        else if (!strcmp(argv[i] + 1, "dir") || !strcmp(argv[i] + 1, "-camera-direction")) process_float3_args(argc, argv, &i, &params->cam_dir, &assigned_params.cam_dir, true, true);
+        else if (!strcmp(argv[i] + 1, "up") || !strcmp(argv[i] + 1, "-camera-up")) process_float3_args(argc, argv, &i, &params->cam_up, &assigned_params.cam_up, true, true);
+        else if (!strcmp(argv[i] + 1, "spd") || !strcmp(argv[i] + 1, "-camera-speed")) process_float_arg(argc, argv, &i, &params->cam_speed, &assigned_params.cam_speed, 0, FLT_MAX);
+        else if (!strcmp(argv[i] + 1, "rspd") || !strcmp(argv[i] + 1, "-camera-rot-speed")) process_float_arg(argc, argv, &i, &params->cam_rotation_speed, &assigned_params.cam_rotation_speed, 0, FLT_MAX);
+        else if (!strcmp(argv[i] + 1, "ncp") || !strcmp(argv[i] + 1, "-no-camera-path")) {
+            params->use_cam_path = false;
+            assigned_params.use_cam_path = true;
+        }
+        else if (!strcmp(argv[i] + 1, "scp") || !strcmp(argv[i] + 1, "-start-camera-path")) {
+            params->start_cam_path = true;
+            assigned_params.start_cam_path = true;
+        }
+        else if (!strcmp(argv[i] + 1, "ccp") || !strcmp(argv[i] + 1, "-complete-camera-path")) {
+            params->complete_cam_path = true;
+            assigned_params.complete_cam_path = true;
+        }
+        else if (!strcmp(argv[i] + 1, "pfr") || !strcmp(argv[i] + 1, "-path-framerate")) process_int_arg(argc, argv, &i, &params->cam_path_framerate, &assigned_params.cam_path_framerate, 0, INT_MAX);
         else if (!strcmp(argv[i] + 1, "acp") || !strcmp(argv[i] + 1, "-append-camera-path")) {
             if (write_cam_path_set) {
                 fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -wcp/--write-camera-path\n", argv[i]);
@@ -208,12 +236,12 @@ void process_args(int argc, char** argv, RenderParameters* params, int* num_obje
                 exit(EXIT_FAILURE);
             }
             params->append_cam_path = false;
-            process_filepath_arg(argc, argv, &i, &params->cam_path_output, false);
+            process_filepath_arg(argc, argv, &i, &params->cam_path_output, &assigned_params.cam_path_output, false);
             write_cam_path_set = true;
         }
         else if (!strcmp(argv[i] + 1, "xf") || !strcmp(argv[i] + 1, "-x-fov")) {
             if (!y_fov_set) {
-                process_float_arg(argc, argv, &i, &params->x_fov, MIN_FOV, MAX_FOV);
+                process_float_arg(argc, argv, &i, &params->x_fov, &assigned_params.x_fov, MIN_FOV, MAX_FOV);
                 x_fov_set = true;
             } else {
                 fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -yf/--y-fov\n", argv[i]);
@@ -222,20 +250,20 @@ void process_args(int argc, char** argv, RenderParameters* params, int* num_obje
         }
         else if (!strcmp(argv[i] + 1, "yf") || !strcmp(argv[i] + 1, "-y-fov")) {
             if (!x_fov_set) {
-                process_float_arg(argc, argv, &i, &params->y_fov, MIN_FOV, MAX_FOV);
+                process_float_arg(argc, argv, &i, &params->y_fov, &assigned_params.y_fov, MIN_FOV, MAX_FOV);
                 y_fov_set = true;
             } else {
                 fprintf(stderr, "[!] Option '%s' is mutually exclusive with option -xf/--x-fov\n", argv[i]);
                 exit(EXIT_FAILURE);
             }
         }
-        else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, &params->num_frames, 0, INT_MAX);
-        else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, &params->image_quality, 0, 100);
-        else if (!strcmp(argv[i] + 1, "xr") || !strcmp(argv[i] + 1, "-x-resolution")) process_int_arg(argc, argv, &i, &params->x_res, 1, INT_MAX);
-        else if (!strcmp(argv[i] + 1, "yr") || !strcmp(argv[i] + 1, "-y-resolution")) process_int_arg(argc, argv, &i, &params->y_res, 1, INT_MAX);
-        else if (!strcmp(argv[i] + 1, "prgd") || !strcmp(argv[i] + 1, "-pixel-ray-grid-dim")) process_int_arg(argc, argv, &i, &params->pixel_ray_grid_dim, 1, INT_MAX);
-        else if (!strcmp(argv[i] + 1, "rbl") || !strcmp(argv[i] + 1, "-ray-bounce-limit")) process_int_arg(argc, argv, &i, &params->ray_bounce_limit, 1, INT_MAX);
-        else if (!strcmp(argv[i] + 1, "ppt") || !strcmp(argv[i] + 1, "-pixels-per-tile")) process_int_arg(argc, argv, &i, &params->pixels_per_tile, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "nf") || !strcmp(argv[i] + 1, "-num-frames")) process_int_arg(argc, argv, &i, &params->num_frames, &assigned_params.num_frames, 0, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "iq") || !strcmp(argv[i] + 1, "-image-quality")) process_int_arg(argc, argv, &i, &params->image_quality, &assigned_params.image_quality, 0, 100);
+        else if (!strcmp(argv[i] + 1, "xr") || !strcmp(argv[i] + 1, "-x-resolution")) process_int_arg(argc, argv, &i, &params->x_res, &assigned_params.x_res, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "yr") || !strcmp(argv[i] + 1, "-y-resolution")) process_int_arg(argc, argv, &i, &params->y_res, &assigned_params.y_res, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "prgd") || !strcmp(argv[i] + 1, "-pixel-ray-grid-dim")) process_int_arg(argc, argv, &i, &params->pixel_ray_grid_dim, &assigned_params.pixel_ray_grid_dim, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "rbl") || !strcmp(argv[i] + 1, "-ray-bounce-limit")) process_int_arg(argc, argv, &i, &params->ray_bounce_limit, &assigned_params.ray_bounce_limit, 1, INT_MAX);
+        else if (!strcmp(argv[i] + 1, "ppt") || !strcmp(argv[i] + 1, "-pixels-per-tile")) process_int_arg(argc, argv, &i, &params->pixels_per_tile, &assigned_params.pixels_per_tile, 1, INT_MAX);
         else {
             fprintf(stderr, "[!] Unrecognised option '%s' provided\n", argv[i]);
             exit(EXIT_FAILURE);
@@ -258,5 +286,5 @@ void process_args(int argc, char** argv, RenderParameters* params, int* num_obje
 
     // Process SDL files
     for (; i < argc; i++) parse_file(argv[i]);
-    process_scene(num_objects, meshes, params, cam_path);
+    process_scene(num_objects, meshes, params, &assigned_params, cam_path);
 }
