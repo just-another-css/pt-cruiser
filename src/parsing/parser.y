@@ -109,6 +109,7 @@ definition  : obj                                       { append_scene_obj($1); 
             | material                                  { append_scene_mat($1); }
             | parameter                                 { append_scene_param($1); }
             | cam_path                                  { append_scene_path($1); }
+            |                                           {}
             ;
 
 obj         : TOK_IDENT TOK_EQUALS TOK_LBRACE
