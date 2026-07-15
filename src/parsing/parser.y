@@ -98,17 +98,17 @@ int yywrap(void) {
 %start top
 
 %%
-top         : scene                                     { parsed_scene = $1; }
+top         : scene                                     {}
             ;
 
-scene       : scene TOK_NEWLINE definition              { $$ = append_scene($1, $3); }
-            | definition                                { $$ = make_scene($1); }
+scene       : scene TOK_NEWLINE definition              {}
+            | definition                                {}
             ;
 
-definition  : obj                                       { $$ = union_obj($1); }
-            | material                                  { $$ = union_mat($1); }
-            | parameter                                 { $$ = union_param($1); }
-            | cam_path                                  { $$ = union_path($1); }
+definition  : obj                                       { append_scene_obj($1); }
+            | material                                  { append_scene_mat($1); }
+            | parameter                                 { append_scene_param($1); }
+            | cam_path                                  { append_scene_path($1); }
             ;
 
 obj         : TOK_IDENT TOK_EQUALS TOK_LBRACE

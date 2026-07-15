@@ -8,10 +8,14 @@
 #define INT_LIST_INITIAL_CAPACITY 4
 #define LIST_INITIAL_CAPACITY 256
 
-static void make_list(void** list, int* len, int* cap, int init_cap, size_t elem_size) {
+static void make_empty_list(void** list, int* cap, int init_cap, size_t elem_size) {
     *list = malloc(init_cap * elem_size);
     assert(*list);
     *cap = init_cap;
+}
+
+static void make_list(void** list, int* len, int* cap, int init_cap, size_t elem_size) {
+    make_empty_list(list, cap, init_cap, elem_size);
     *len = 1;
 }
 
@@ -411,102 +415,41 @@ void free_cam_path(CameraPath_t path) {
     // TODO: traverse lists and free
 }
 
-Definition_t union_obj(Obj_t obj) {
-    return (Definition_t) {
-        .type = OBJECT,
-        .obj = obj
-    };
+Scene_t scene;
+
+void append_scene_obj(Obj_t obj) {
+    append_list(&scene.objects, &scene.obj_len, &scene.obj_capacity, &obj, sizeof(Obj_t));
 }
 
-Definition_t union_mat(Mat_t mat) {
-    return (Definition_t) {
-        .type = MATERIAL,
-        .mat = mat
-    };
+void append_scene_mat(Mat_t mat) {
+    append_list(&scene.materials, &scene.mat_len, &scene.mat_capacity, &mat, sizeof(Mat_t));
 }
 
-Definition_t union_param(Param_t param) {
-    return (Definition_t) {
-        .type = PARAM,
-        .param = param
-    };
+void append_scene_param(Param_t param) {
+    append_list(&scene.params, &scene.param_len, &scene.param_capacity, &param, sizeof(Param_t));
 }
 
-Definition_t union_path(CameraPath_t path) {
-    return (Definition_t) {
-        .type = CAM_PATH,
-        .cam_path = path
-    };
-}
-
-static Scene_t* init_scene() {
-    Scene_t* scene = malloc(sizeof(Scene_t));
-    assert(scene);
-    make_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, LIST_INITIAL_CAPACITY, sizeof(Obj_t));
-    make_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, LIST_INITIAL_CAPACITY, sizeof(Mat_t));
-    make_list(&scene->params, &scene->param_len, &scene->param_capacity, LIST_INITIAL_CAPACITY, sizeof(Param_t));
-    scene->path.lists = NULL;
-    scene->path_set = false;
-    return scene;
-}
-
-Scene_t* make_scene(Definition_t definition) {
-    Scene_t* scene = init_scene();
-    switch (definition.type) {
-        case OBJECT:
-            scene->objects[0] = definition.obj;
-            scene->mat_len = 0; // RAL lengths defaulted to 1 in init_scene; reset the other list's length to zero since nothing inserted into it
-            scene->param_len = 0;
-            break;
-        case MATERIAL:
-            scene->materials[0] = definition.mat;
-            scene->obj_len = 0;
-            scene->param_len = 0;
-            break;
-        case PARAM:
-            scene->params[0] = definition.param;
-            scene->obj_len = 0;
-            scene->mat_len = 0;
-            break;
-        case CAM_PATH:
-            if (scene->path_set) {
-                fputs("[!] Multiple camera paths defined\n", stderr);
-                exit(EXIT_FAILURE);
-            }
-            scene->path = definition.cam_path;
-            scene->path_set = true;
+void append_scene_path(CameraPath_t path) {
+    if (scene.path_set) {
+        fputs("[!] Multiple camera paths defined\n", stderr);
+        exit(EXIT_FAILURE);
     }
-    return scene;
+    scene.path = path;
+    scene.path_set = true;
 }
 
-Scene_t* append_scene(Scene_t* scene, Definition_t definition) {
-    switch (definition.type) {
-        case OBJECT:
-            append_list(&scene->objects, &scene->obj_len, &scene->obj_capacity, &definition.obj, sizeof(Obj_t));
-            break;
-        case MATERIAL:
-            append_list(&scene->materials, &scene->mat_len, &scene->mat_capacity, &definition.mat, sizeof(Mat_t));
-            break;
-        case PARAM:
-            append_list(&scene->params, &scene->param_len, &scene->param_capacity, &definition.param, sizeof(Param_t));
-            break;
-        case CAM_PATH:
-            if (scene->path_set) {
-                fputs("[!] Multiple camera paths defined\n", stderr);
-                exit(EXIT_FAILURE);
-            }
-            scene->path = definition.cam_path;
-            scene->path_set = true;
-    }
-    return scene;
+void init_scene() {
+    scene = (Scene_t) {}; // zero-init all structs and lengths
+    make_empty_list(&scene.objects, &scene.obj_capacity, LIST_INITIAL_CAPACITY, sizeof(Obj_t));
+    make_empty_list(&scene.materials, &scene.mat_capacity, LIST_INITIAL_CAPACITY, sizeof(Mat_t));
+    make_empty_list(&scene.params, &scene.param_capacity, LIST_INITIAL_CAPACITY, sizeof(Param_t));
 }
 
-void free_scene(Scene_t* scene) {
-    for (int i = 0; i < scene->obj_len; i++) free_object(scene->objects[i]);
-    for (int i = 0; i < scene->mat_len; i++) free_material(scene->materials[i]);
-    for (int i = 0; i < scene->param_len; i++) free_param(scene->params[i]);
-    free(scene->objects);
-    free(scene->materials);
-    free(scene->params);
-    free(scene);
+void free_scene() {
+    for (int i = 0; i < scene.obj_len; i++) free_object(scene.objects[i]);
+    for (int i = 0; i < scene.mat_len; i++) free_material(scene.materials[i]);
+    for (int i = 0; i < scene.param_len; i++) free_param(scene.params[i]);
+    free(scene.objects);
+    free(scene.materials);
+    free(scene.params);
 }

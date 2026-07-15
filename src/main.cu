@@ -167,6 +167,7 @@ int main(int argc, char **argv) {
     }
     process_help_arg(argc, argv);
     
+    init_parsing();
     FILE *input_fp = fopen(argv[1], "r");
     if (!input_fp) {
         fprintf(stderr, "[!] Error: Cannot open file %s\n", argv[1]);

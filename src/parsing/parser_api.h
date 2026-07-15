@@ -200,6 +200,8 @@ typedef struct {
     bool path_set;
 } Scene_t;
 
+extern Scene_t scene;
+
 extern UV make_uv(float x, float y);
 extern UVs* make_uvs(UV head);
 extern UVs* append_uvs(UVs *uvs, UV value);
@@ -262,13 +264,12 @@ extern CameraPath_t make_cam_path_fps(int fps);
 extern CameraPath_t append_cam_path(CameraPath_t path, CameraPathList list);
 extern CameraPath_t set_cam_path_fps(CameraPath_t path, int fps);
 
-extern Definition_t union_obj(Obj_t obj);
-extern Definition_t union_mat(Mat_t mat);
-extern Definition_t union_param(Param_t param);
-extern Definition_t union_path(CameraPath_t path);
+extern void append_scene_obj(Obj_t obj);
+extern void append_scene_mat(Mat_t mat);
+extern void append_scene_param(Param_t param);
+extern void append_scene_path(CameraPath_t path);
 
-extern Scene_t* make_scene(Definition_t definition);
-extern Scene_t* append_scene(Scene_t* scene, Definition_t definition);
-extern void free_scene(Scene_t* scene);
+extern void init_scene();
+extern void free_scene();
 
 #endif
