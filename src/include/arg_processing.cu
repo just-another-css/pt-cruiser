@@ -81,7 +81,10 @@ static void process_filepath_arg(int argc, char** argv, int* i, char** filepath,
 
 void process_help_arg(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
-        if (*argv[i] == '-' && (!strcmp(argv[i] + 1, "h") || !strcmp(argv[i] + 1, "-help"))) {
+        if (!strcmp(argv[i], "--") && 
+                !(!strcmp(argv[i - 1] + 1, "i") || !strcmp(argv[i - 1] + 1, "-image") || !strcmp(argv[i - 1] + 1, "ri")
+                || !strcmp(argv[i - 1] + 1, "wcp") || !strcmp(argv[i - 1] + 1, "-write-camera-path"))) return;
+        if (!strcmp(argv[i] + 1, "h") || !strcmp(argv[i] + 1, "-help")) {
             printf("Path Tracing CUDA Renderer with User Interface and Syntactic Entity\nRepresentation (PT CRUISER)\n\n"
                    "Usage: %s [options [--]] <SDL input...>\n"
                    " OPTIONS:                                                                      \n"
