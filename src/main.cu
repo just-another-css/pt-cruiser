@@ -161,10 +161,6 @@ static void calc_frametime(struct timespec* prev, struct timespec* cur, float* f
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        fputs("[!] No SDL file provided\n", stderr);
-        return EXIT_FAILURE;
-    }
     process_help_arg(argc, argv);
     
     int num_objects;
@@ -293,7 +289,7 @@ trace:              trace_camera_path = trace_path(cam_path, params.cam_path_fra
             if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
             frame_count++;
         }
-        if (params.nvjpeg_last) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
+        if (params.nvjpeg_last && params.nvjpeg_output) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
     } else {
         do {
 repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
