@@ -238,10 +238,10 @@ trace:              trace_camera_path = trace_path(cam_path, params.cam_path_fra
                         printf("[*] Tracing camera path...\n");
                         trace_camera_path = true;
                         cam_path_frame_offset = frame_count;
-                        if (params.cam_path_framerate) { 
+                        if (params.cam_path_framerate) {
                             timespec_get(&start, TIME_UTC);
                             cum_path_paused = 0;
-                        } else cam_path_frame_offset += frame_count - paused_start_frame;
+                        } else cam_path_frame_offset = frame_count;
                         start_trace_path(cam_path, &params);
                     } else if (path_paused && glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS) {
                         printf("[*] Resuming camera path\n");
