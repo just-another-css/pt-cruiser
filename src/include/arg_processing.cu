@@ -293,6 +293,10 @@ void process_args(int argc, char** argv, RenderParameters* params, int* num_obje
     }
 
     // Process SDL files
-    for (; i < argc; i++) parse_file(argv[i]);
+    if (i < argc) for (; i < argc; i++) parse_file(argv[i]);
+    else {
+        fputs("[!] No SDL files were provided\n", stderr);
+        exit(EXIT_FAILURE);
+    }
     process_scene(num_objects, meshes, params, &assigned_params, cam_path);
 }
