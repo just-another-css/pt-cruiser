@@ -85,8 +85,9 @@ DescArgs* make_desc_args(DescArg head) {
 DescArgs* make_empty_desc_args(void) {
     DescArgs* args = malloc(sizeof(DescArgs));
     assert(args);
-    args->len = 0;
+    args->args = NULL;
     args->capacity = 0;
+    args->len = 0;
     return args;
 }
 
