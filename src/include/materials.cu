@@ -62,6 +62,10 @@ void initialise_material_texture(int material_i, char* texture_path) {
     // Load image to host array
     int x, y, n; // receive image data from stb
     float *texture_data = stbi_loadf(texture_path, &x, &y, &n, 4); // force 4 channels for CUDA texture object compatibility
+    if (!texture_data) {
+        printf("[!] Could not load texture file '%s'\n", texture_path);
+        exit(EXIT_FAILURE);
+    }
     // Copy image data to CUDA array
     cudaArray_t texture_array;
     struct cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
