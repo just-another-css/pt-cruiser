@@ -212,7 +212,7 @@ __device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_in
     // if (vec_dot_prod(ray_dir, normal) > 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
     // if (transparency > 0 && curand_uniform(rand_state) < transparency) { // TODO: use transparency to filter only proportional number of rays to refract
     if (transparency > 0) {
-        float in_cos = -vec_dot_prod(normal, ray_dir);
+        float in_cos = -vec_dot_prod(normal, ray_dir); // ensured to be positive
         if (in_cos < 0) { // ensure that normal faces in opposite direction to incident ray
             scale_vec_ip(-1, &normal);
             in_cos *= -1;
@@ -227,13 +227,22 @@ __device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_in
             next_refr_ind = 1.0f;
             refr_ind_ratio = materials_data.refractive_indices[material];
         }
-        float out_cos_sqr = 1 - refr_ind_ratio * refr_ind_ratio * (1 - in_cos * in_cos); // square of cos of angle between plane normal and refracted ray
-        if (out_cos_sqr >= 0) { // ray will refract
-            *ray_refr_ind = next_refr_ind;
-            return add_vec( // direction of refracted ray
-                scale_vec(refr_ind_ratio, ray_dir),
-                scale_vec(refr_ind_ratio * in_cos - __fsqrt_rn(out_cos_sqr), normal)
-            );
+        // Schlick approximation
+        float refl_coef = fdividef(cur_refr_ind - next_refr_ind, cur_refr_ind + next_refr_ind); // minimum amount of light reflected
+        refl_coef *= refl_coef; // coefficient is square of above value
+        float cos_term = 1 - in_cos;
+        float cos_term_sqr = cos_term * cos_term;
+        float reflection = refl_coef + (1 - refl_coef) * cos_term_sqr * cos_term_sqr * cos_term;
+        if (curand_uniform(rand_state) > reflection) {
+            // Determine if ray will refract or TIR
+            float out_cos_sqr = 1 - refr_ind_ratio * refr_ind_ratio * (1 - in_cos * in_cos); // square of cos of angle between plane normal and refracted ray
+            if (out_cos_sqr >= 0) { // ray will refract
+                *ray_refr_ind = next_refr_ind;
+                return add_vec( // direction of refracted ray
+                    scale_vec(refr_ind_ratio, ray_dir),
+                    scale_vec(refr_ind_ratio * in_cos - __fsqrt_rn(out_cos_sqr), normal)
+                );
+            }
         }
         add_vec_ip(&ray_int->pos, scale_vec(2 * EPSILON, normal));
         return add_vec(ray_dir, scale_vec(2 * in_cos, normal)); // direction of internally reflected ray
