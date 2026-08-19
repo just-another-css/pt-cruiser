@@ -205,40 +205,38 @@ __device__ static __forceinline__ float3 calc_rand_ray(int light_source_i, int o
     return sub_vec(point, ray_origin);
 }
 
-__device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision ray_int, float* ray_refr_ind, int material, curandStatePhilox4_32_10_t* rand_state) {
+__device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_int, float* ray_refr_ind, int material, curandStatePhilox4_32_10_t* rand_state) {
     // Check if transparent; if so, check random; if over threshold, refract based on material data
     float transparency = materials_data.transparencies[material];
-    float3 normal = f4_to_f3(objects_dev.meshes[ray_int.obj_i].normals[ray_int.face_i]);
+    float3 normal = f4_to_f3(objects_dev.meshes[ray_int->obj_i].normals[ray_int->face_i]);
     // if (vec_dot_prod(ray_dir, normal) > 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
+    //if (transparency > 0 && curand_uniform(rand_state) < transparency) { // TODO: use transparency to filter only proportional number of rays to refract
     if (transparency > 0) {
-        // --- Refraction case ---
-        // `normal` here already faces against the incoming ray (dot(ray_dir, normal) < 0).
-        // We need the geometric normal to tell entering from exiting.
-        float3 geo_normal = f4_to_f3(objects_dev.meshes[ray_int.obj_i].normals[ray_int.face_i]);
-        // bool entering = vec_dot_prod(ray_dir, geo_normal) < 0;
-
-        float eta_i = *ray_refr_ind;                                  // current medium
-        bool entering = eta_i <= 1.0f;
-        float eta_t = entering ? materials_data.refractive_indices[material] // entering glass
-                            : 1.0f;                               // exiting to air
-        float refr_ratio = fdividef(eta_i, eta_t);
-
-        float norm_dot_ray = vec_dot_prod(normal, ray_dir);          // negative (normal faces against ray)
-        float cosi = -norm_dot_ray;                                  // positive
-        float k = 1.0f - refr_ratio * refr_ratio * (1.0f - cosi * cosi);
-
-        if (k < 0.0f && !entering) {
-            // Total internal reflection: reflect, do NOT change the medium index
-            return sub_vec(ray_dir, scale_vec(2.0f * norm_dot_ray, normal));
+        float in_cos = -vec_dot_prod(normal, ray_dir);
+        if (in_cos < 0) {
+            scale_vec_ip(-1, &normal);
+            in_cos *= -1;
         }
-
-        // Successful refraction: update the medium the ray is now travelling in
-        *ray_refr_ind = eta_t;
-
-        return add_vec(
-            scale_vec(refr_ratio, ray_dir),
-            scale_vec(refr_ratio * cosi - sqrtf(k), normal)
-        );
+        float cur_refr_ind = *ray_refr_ind, next_refr_ind, refr_ind_ratio;
+        // assumes that all rays are either entering the object from air or exiting the object into air
+        if (cur_refr_ind == 1.0f) { // entering material
+            next_refr_ind = materials_data.refractive_indices[material];
+            refr_ind_ratio = __frcp_rn(next_refr_ind);
+        }
+        else { // exiting material into air
+            next_refr_ind = 1.0f;
+            refr_ind_ratio = materials_data.refractive_indices[material];
+        }
+        float out_cos_sqr = 1 - refr_ind_ratio * refr_ind_ratio * (1 - in_cos * in_cos); // square of cos of angle between plane normal and refracted ray
+        if (out_cos_sqr >= 0) { // ray will refract
+            *ray_refr_ind = next_refr_ind;
+            return add_vec( // direction of refracted ray
+                scale_vec(refr_ind_ratio, ray_dir),
+                scale_vec(refr_ind_ratio * in_cos - __fsqrt_rn(out_cos_sqr), normal)
+            );
+        }
+        add_vec_ip(&ray_int->pos, scale_vec(2 * EPSILON, normal));
+        return add_vec(ray_dir, scale_vec(2 * in_cos, normal)); // direction of internally reflected ray
     }
     // Diffuse ray with cosine distribution
     float z = fmaf(curand_uniform(rand_state), 2, -1); // z component of random offset vector; determines size of circular slice of sphere
@@ -371,7 +369,7 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     }
     // if (!x) printf("in step, the ray is figuring out its future\n");
     // Calculate new ray direction
-    float3 new_ray_dir = calc_next_ray_dir(ray_dir, ray_int, ray_refr_inds + x, material, rand_state);
+    float3 new_ray_dir = calc_next_ray_dir(ray_dir, &ray_int, ray_refr_inds + x, material, rand_state);
     // Calculate new throughput with BRDF
     ray_thrput = multiply_vec(scale_vec(calc_next_throughput(ray_dir, ray_int_mesh->normals[ray_int.face_i], new_ray_dir, material), ray_thrput), // use material BRDF
                               texture_value); // load pixel from texture
