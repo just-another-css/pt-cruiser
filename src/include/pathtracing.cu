@@ -210,10 +210,10 @@ __device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_in
     float transparency = materials_data.transparencies[material];
     float3 normal = f4_to_f3(objects_dev.meshes[ray_int->obj_i].normals[ray_int->face_i]);
     // if (vec_dot_prod(ray_dir, normal) > 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
-    //if (transparency > 0 && curand_uniform(rand_state) < transparency) { // TODO: use transparency to filter only proportional number of rays to refract
+    // if (transparency > 0 && curand_uniform(rand_state) < transparency) { // TODO: use transparency to filter only proportional number of rays to refract
     if (transparency > 0) {
         float in_cos = -vec_dot_prod(normal, ray_dir);
-        if (in_cos < 0) {
+        if (in_cos < 0) { // ensure that normal faces in opposite direction to incident ray
             scale_vec_ip(-1, &normal);
             in_cos *= -1;
         }
