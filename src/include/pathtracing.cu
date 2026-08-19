@@ -331,8 +331,12 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     curandStatePhilox4_32_10_t *rand_state = rand_states + x;
     float3 ray_origin = ray_origins[x], ray_dir = ray_dirs[x], ray_thrput = ray_throughputs[x]; // copy values for faster access
     if (zero_vec(ray_thrput)) return;
+    // Determine whether to perform NEE or BSDF sampling
+    ray_collision last_ray_collision = last_ray_collisions[x];
+    bool do_nee = !first_step && materials_data.transparencies[objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]] == 0;
+    // if (!first_step && do_nee) printf("not doing NEE! ");
     // Sample a light source with NEE if not on the first step
-    if (!first_step) {
+    if (do_nee) {
         // if (!x) printf("in step, starting NEE\n");
         int light_source_i, light_source_face_i;
         float light_source_power, light_source_face_power;
@@ -343,17 +347,16 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
         ray_collision light_source_ray_rc = find_first_collision(ray_origin, norm_light_source_ray); // check first object in ray direction
         // if (!x) printf("in step, sampled, applying\n");
         if (light_source_ray_rc.obj_i == light_source_obj_i && light_source_ray_rc.face_i == light_source_face_i) { // if equal to light source, add contribution
-            ray_collision last_ray_collision = last_ray_collisions[x];
             TriangleMesh* light_source_mesh = objects_dev.meshes + light_source_obj_i;
             float2 light_source_uv = add3_vec2(light_source_mesh->uv_a[light_source_ray_rc.face_i], scale_vec2(light_source_ray_rc.u, light_source_mesh->uv_ab[light_source_ray_rc.face_i]), scale_vec2(light_source_ray_rc.v, light_source_mesh->uv_ac[light_source_ray_rc.face_i]));
             ray_values[x] = add_vec(ray_values[x], multiply3_vec(scale_vec(calc_next_throughput_nee(ray_dir, objects_dev.meshes[last_ray_collision.obj_i].normals[last_ray_collision.face_i], norm_light_source_ray, objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]) *
-                                                                        fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
-                                                                        light_sources_dev.norm_obj_powers[light_source_i] * // inv. of probability of selecting object
-                                                                        light_sources_dev.norm_face_powers[light_source_i][light_source_face_i] * // inv. of probability of selecting face
-                                                                        __frcp_rn(vec_dot_sqr(light_source_ray)), // divide by square of distance to light
-                                                                        ray_thrput), // use material BRDF and NEE ray
-                                                                objects_dev.meshes[light_source_obj_i].lightings[light_source_face_i], // use object lighting modifier
-                                                                f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
+                                                                           fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
+                                                                           light_sources_dev.norm_obj_powers[light_source_i] * // inv. of probability of selecting object
+                                                                           light_sources_dev.norm_face_powers[light_source_i][light_source_face_i] * // inv. of probability of selecting face
+                                                                           __frcp_rn(vec_dot_sqr(light_source_ray)), // divide by square of distance to light
+                                                                           ray_thrput), // use material BRDF and NEE ray
+                                                                 objects_dev.meshes[light_source_obj_i].lightings[light_source_face_i], // use object lighting modifier
+                                                                 f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
         }
     }
     // if (!x) printf("in step, starting pathtracing\n");
@@ -371,7 +374,7 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     float2 ray_int_uv = add3_vec2(ray_int_mesh->uv_a[ray_int.face_i], scale_vec2(ray_int.u, ray_int_mesh->uv_ab[ray_int.face_i]), scale_vec2(ray_int.v, ray_int_mesh->uv_ac[ray_int.face_i]));
     float3 texture_value = f4_to_f3(tex2D<float4>(materials_data.textures[material], ray_int_uv.x, ray_int_uv.y));
     // Check if object is a light
-    if (first_step && nonzero_vec(light_output)) {
+    if (!do_nee && nonzero_vec(light_output)) {
         // if (!x) printf("in step, the ray lived in the light\n");
         ray_values[x] = add_vec(ray_values[x], multiply3_vec(ray_thrput, light_output, texture_value));
         ray_light_ints[x] = true;
