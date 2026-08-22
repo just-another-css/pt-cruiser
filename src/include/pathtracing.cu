@@ -247,66 +247,36 @@ __device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_in
         add_vec_ip(&ray_int->pos, scale_vec(2 * EPSILON, normal));
         return add_vec(ray_dir, scale_vec(2 * in_cos, normal)); // direction of internally reflected ray
     }
+    float smoothness = materials_data.smoothnesses[material];
+    // Select ray for new direction
+    if (curand_uniform(rand_state) < smoothness) { // Reflection ray with roughness
+        float3 specular_ray = sub_vec(ray_dir, scale_vec(2 * vec_dot_prod(ray_dir, normal), normal)); // cast ray for pure reflection for later offset
+        // create arbitrary orthonormal basis based on z axis
+        float3 ortho_fst = scale_vec(rsqrtf(fmaf(specular_ray.y, specular_ray.y, specular_ray.x * specular_ray.x)), make_float3(-specular_ray.y, specular_ray.x, 0));
+        float3 ortho_snd = vec_cross_prod(specular_ray, ortho_fst);
+        norm_vec_ip(&ortho_snd);
+        float cos_theta = powf(curand_uniform(rand_state), 1 - smoothness); // phong lobe polar angle
+        float sin_theta = sqrtf(fmaxf(0, 1 - cos_theta * cos_theta));
+        float phi = 2 * CUDART_PI_F * curand_uniform(rand_state);
+        float sin_phi, cos_phi;
+        sincosf(phi, &sin_phi, &cos_phi);
+        // Build direction in the frame around `specular_ray` (the mirror direction), using the existing ortho_fst / ortho_snd basis
+        // scale vectors in-place for use in reflection ray
+        scale_vec_ip(cos_theta, &specular_ray);
+        scale_vec_ip(sin_phi, &ortho_snd);
+        return make_float3(
+            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.x, ortho_snd.x), specular_ray.x),
+            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.y, ortho_snd.y), specular_ray.y),
+            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.z, ortho_snd.z), specular_ray.z)
+        );
+    }
     // Diffuse ray with cosine distribution
     float z = fmaf(curand_uniform(rand_state), 2, -1); // z component of random offset vector; determines size of circular slice of sphere
     float angle = curand_uniform(rand_state) * CUDART_PI_F * 2; // angle of random offset vector in circular slice determined by z
+    float sin_angle, cos_angle;
+    sincosf(angle, &sin_angle, &cos_angle);
     float radius = sqrtf(1 - z * z); // radius of circular slice of sphere
-    float3 diffuse_ray = norm_vec_safe(add_vec(normal, make_float3(radius * cosf(angle), radius * sinf(angle), z))); // add to normal vector and normalise for Lambertian distribution
-
-    // Reflection ray with roughness
-    float3 specular_ray = sub_vec(ray_dir, scale_vec(2 * vec_dot_prod(ray_dir, normal), normal)); // cast ray for pure reflection for later offset
-    // float cone_angle = asinf(curand_uniform(rand_state) * materials_data.roughnesses[material]); // select an angle between 0 and roughness
-    // float ray_cone_angle = 2 * CUDART_PI_F * curand_uniform(rand_state); // choose a second angle
-    
-    // // create arbitrary orthonormal basis based on z axis
-    float3 ortho_fst = scale_vec(rsqrtf(fmaf(specular_ray.y, specular_ray.y, specular_ray.x * specular_ray.x)), make_float3(-specular_ray.y, specular_ray.x, 0));
-    float3 ortho_snd = vec_cross_prod(specular_ray, ortho_fst);
-    scale_vec_ip(rsqrtf(vec_dot_sqr(ortho_snd)), &ortho_snd);
-
-    // // calculate final reflection ray
-    // float sin_theta = sinf(cone_angle);
-    // float cos_theta = cosf(cone_angle);
-    // float sin_phi = sinf(ray_cone_angle);
-    // float cos_phi = cosf(ray_cone_angle);
-    // float3 reflection_ray = make_float3( 
-    //     fmaf(cos_theta, specular_ray.x, sin_theta * fmaf(cos_phi, ortho_fst.x, sin_phi * ortho_snd.x)),
-    //     fmaf(cos_theta, specular_ray.y, sin_theta * fmaf(cos_phi, ortho_fst.y, sin_phi * ortho_snd.y)),
-    //     fmaf(cos_theta, specular_ray.z, sin_theta * fmaf(cos_phi, ortho_fst.z, sin_phi * ortho_snd.z))
-    // );
-    float smoothness = materials_data.smoothnesses[material];
-    float n = smoothness / (1.0f - smoothness);          // same n as the BRDF
-    float u1 = curand_uniform(rand_state);
-    float u2 = curand_uniform(rand_state);
-    float cos_theta = powf(u1, 1.0f / (n + 1.0f));        // Phong-lobe polar angle
-    float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - cos_theta * cos_theta));
-    float phi = 2.0f * CUDART_PI_F * u2;
-    float sin_phi = sinf(phi);
-    float cos_phi = cosf(phi);
-    // build direction in the frame around `specular_ray` (the mirror direction),
-    // using your existing ortho_fst / ortho_snd basis:
-    float3 reflection_ray = make_float3(
-        fmaf(cos_theta, specular_ray.x, sin_theta * fmaf(cosf(phi), ortho_fst.x, sinf(phi) * ortho_snd.x)),
-        fmaf(cos_theta, specular_ray.y, sin_theta * fmaf(cosf(phi), ortho_fst.y, sinf(phi) * ortho_snd.y)),
-        fmaf(cos_theta, specular_ray.z, sin_theta * fmaf(cosf(phi), ortho_fst.z, sinf(phi) * ortho_snd.z)));
-
-    // float3 reflection_ray_ = add_vec(scale_vec(cosf(cone_angle), specular_ray), 
-    //                                  scale_vec(sinf(cone_angle), add_vec(scale_vec(cosf(ray_cone_angle), ortho_fst),
-    //                                                                      scale_vec(sinf(ray_cone_angle), ortho_snd))));
-
-    // sanity check that ray doesn't go through the surface, otherwise flip phi
-    if (vec_dot_prod(reflection_ray, normal) <= 0) {
-        // sin is unchanged, modify cos
-        cos_phi *= -1; // cos(pi - x) = -cos(x)
-        reflection_ray = make_float3( 
-            fmaf(cos_theta, specular_ray.x, sin_theta * fmaf(cos_phi, ortho_fst.x, sin_phi * ortho_snd.x)),
-            fmaf(cos_theta, specular_ray.y, sin_theta * fmaf(cos_phi, ortho_fst.y, sin_phi * ortho_snd.y)),
-            fmaf(cos_theta, specular_ray.z, sin_theta * fmaf(cos_phi, ortho_fst.z, sin_phi * ortho_snd.z))
-        );
-    }
-
-    // Select ray for new direction
-    return curand_uniform(rand_state) >= smoothness ? diffuse_ray : reflection_ray;
-    // return make_float3(0, 0, 0);
+    return norm_vec_safe(add_vec(normal, make_float3(radius * cos_angle, radius * sin_angle, z))); // add to normal vector and normalise for Lambertian distribution
 }
 
 __device__ static __forceinline__ float calc_term_threshold(float3 throughput) {
