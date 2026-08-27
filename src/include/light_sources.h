@@ -6,10 +6,12 @@
 typedef struct {
     int num_light_sources; // used to prevent invalid accesses to 
     int *obj_is; // identify objects
+    int *light_is; // object indices to light source indices
     float *cum_norm_obj_powers; // used to sample objects
     float *norm_obj_powers; // used for probability of sampling each object
     int *num_lit_faces; // used to prevent invalid accesses to face arrays
     int **face_is; // identify faces
+    int **light_face_is; // face indices to light source face indices
     float **cum_norm_face_powers; // used to sample faces
     float **norm_face_powers; // used for probability of sampling each face
 } LightSources;
