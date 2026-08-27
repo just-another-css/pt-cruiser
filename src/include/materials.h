@@ -15,7 +15,7 @@ extern char* default_material_names[];
 #define LIGHT_SOURCE_ROUGHNESS 0
 
 // Constants for glass
-#define GLASS_TRANSPARENCY 0.9
+#define GLASS_TRANSPARENCY 0.95
 #define GLASS_CRIT_ANGLE 1.5707
 #define GLASS_REFRACTIVE_INDEX 1.5
 #define GLASS_SMOOTHNESS 1
