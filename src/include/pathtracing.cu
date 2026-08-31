@@ -64,9 +64,10 @@ __global__ static void calc_pixel_samples(int cur_tile_pixels, int rays_per_pixe
                                         scale_vec(pixel_grid_row + curand_uniform(rand_states + ray_i), top_bottoms[pixel_i])));
 }
 
-__global__ static void initialise_ray_buffers(int cur_tile_rays, float3 ray_origin, float3* ray_origins, float3* ray_throughputs, float3* ray_values, float* ray_refr_inds, bool* ray_light_ints) {
+__global__ static void initialise_ray_buffers(int cur_tile_rays, float3 ray_origin, float3* specular_rays, float3* ray_origins, float3* ray_throughputs, float3* ray_values, float* ray_refr_inds, bool* ray_light_ints) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= cur_tile_rays) return;
+    specular_rays[x] = make_float3(0,0,0); // zero magnitude vector as sentinel
     ray_origins[x] = ray_origin;
     ray_throughputs[x] = make_float3(1, 1, 1);
     ray_values[x] = make_float3(0, 0, 0); // THIS 
@@ -205,11 +206,12 @@ __device__ static __forceinline__ float3 calc_rand_ray(int light_source_i, int o
     return sub_vec(point, ray_origin);
 }
 
-__device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_int, float* ray_refr_ind, int material, curandStatePhilox4_32_10_t* rand_state) {
+#define MAX_ALPHA 100
+
+__device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_int, float* ray_refr_ind, int material, curandStatePhilox4_32_10_t* rand_state, float3* specular_ray_buf_elem, float* pdf_value) {
     // Check if transparent; if so, check random; if over threshold, refract based on material data
     float transparency = materials_data.transparencies[material];
     float3 normal = f4_to_f3(objects_dev.meshes[ray_int->obj_i].normals[ray_int->face_i]);
-    // if (vec_dot_prod(ray_dir, normal) > 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
     // if (transparency > 0 && curand_uniform(rand_state) < transparency) { // TODO: use transparency to filter only proportional number of rays to refract
     if (transparency > 0) {
         float in_cos = -vec_dot_prod(normal, ray_dir); // ensured to be positive
@@ -232,56 +234,68 @@ __device__ static float3 calc_next_ray_dir(float3 ray_dir, ray_collision* ray_in
         refl_coef *= refl_coef; // coefficient is square of above value
         float cos_term = 1 - in_cos;
         float cos_term_sqr = cos_term * cos_term;
-        float reflection = refl_coef + (1 - refl_coef) * cos_term_sqr * cos_term_sqr * cos_term;
-        if (curand_uniform(rand_state) > reflection) {
+        float reflection_prob = refl_coef + (1 - refl_coef) * cos_term_sqr * cos_term_sqr * cos_term;
+        if (curand_uniform(rand_state) > reflection_prob) { // refraction selected
             // Determine if ray will refract or TIR
             float out_cos_sqr = 1 - refr_ind_ratio * refr_ind_ratio * (1 - in_cos * in_cos); // square of cos of angle between plane normal and refracted ray
             if (out_cos_sqr >= 0) { // ray will refract
+                *pdf_value = 1 - reflection_prob; // refraction selected and TIR did not occur
                 *ray_refr_ind = next_refr_ind;
                 return add_vec( // direction of refracted ray
                     scale_vec(refr_ind_ratio, ray_dir),
                     scale_vec(refr_ind_ratio * in_cos - __fsqrt_rn(out_cos_sqr), normal)
                 );
-            }
-        }
+            } else *pdf_value = 1; // TIR occurs with probability of 1
+        } else *pdf_value = reflection_prob; // reflection selected
         add_vec_ip(&ray_int->pos, scale_vec(2 * EPSILON, normal));
         return add_vec(ray_dir, scale_vec(2 * in_cos, normal)); // direction of internally reflected ray
     }
+    if (vec_dot_prod(ray_dir, normal) < 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
+    float3 specular_ray = sub_vec(ray_dir, scale_vec(2 * vec_dot_prod(ray_dir, normal), normal)); // cast ray for pure reflection for later offset
+    *specular_ray_buf_elem = specular_ray; // write separately to keep specular_ray in closer memory than specular_rays buffer in global
     float smoothness = materials_data.smoothnesses[material];
     // Select ray for new direction
     if (curand_uniform(rand_state) < smoothness) { // Reflection ray with roughness
-        float3 specular_ray = sub_vec(ray_dir, scale_vec(2 * vec_dot_prod(ray_dir, normal), normal)); // cast ray for pure reflection for later offset
         // create arbitrary orthonormal basis based on z axis
         float3 ortho_fst = scale_vec(rsqrtf(fmaf(specular_ray.y, specular_ray.y, specular_ray.x * specular_ray.x)), make_float3(-specular_ray.y, specular_ray.x, 0));
         float3 ortho_snd = vec_cross_prod(specular_ray, ortho_fst);
         norm_vec_ip(&ortho_snd);
-        float cos_theta = powf(curand_uniform(rand_state), 1 - smoothness); // phong lobe polar angle
-        float sin_theta = sqrtf(fmaxf(0, 1 - cos_theta * cos_theta));
+        float roughness = materials_data.roughnesses[material];
+        float cos_theta = powf(curand_uniform(rand_state), roughness); // phong lobe polar angle
+        float sin_theta = sqrtf(1 - cos_theta * cos_theta);
         float phi = 2 * CUDART_PI_F * curand_uniform(rand_state);
         float sin_phi, cos_phi;
         sincosf(phi, &sin_phi, &cos_phi);
         // Build direction in the frame around `specular_ray` (the mirror direction), using the existing ortho_fst / ortho_snd basis
         // scale vectors in-place for use in reflection ray
-        scale_vec_ip(cos_theta, &specular_ray);
+        float3 theta_specular_ray = scale_vec(cos_theta, specular_ray);
         scale_vec_ip(sin_phi, &ortho_snd);
-        return make_float3(
-            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.x, ortho_snd.x), specular_ray.x),
-            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.y, ortho_snd.y), specular_ray.y),
-            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.z, ortho_snd.z), specular_ray.z)
+        float alpha = roughness != 0 ? fdividef(1 - roughness, roughness) : MAX_ALPHA;
+        float3 reflection_ray = make_float3(
+            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.x, ortho_snd.x), theta_specular_ray.x),
+            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.y, ortho_snd.y), theta_specular_ray.y),
+            fmaf(sin_theta, fmaf(cos_phi, ortho_fst.z, ortho_snd.z), theta_specular_ray.z)
         );
+        *pdf_value = smoothness * fdividef(alpha + 1, 2 * CUDART_PI_F) * powf(vec_dot_prod(reflection_ray, specular_ray), alpha);
+        return reflection_ray;
     }
+    // if (vec_dot_prod(ray_dir, normal) < 0) scale_vec_ip(-1.0f, &normal); // always face toward incoming ray
     // Diffuse ray with cosine distribution
     float z = fmaf(curand_uniform(rand_state), 2, -1); // z component of random offset vector; determines size of circular slice of sphere
     float angle = curand_uniform(rand_state) * CUDART_PI_F * 2; // angle of random offset vector in circular slice determined by z
     float sin_angle, cos_angle;
     sincosf(angle, &sin_angle, &cos_angle);
     float radius = sqrtf(1 - z * z); // radius of circular slice of sphere
-    return norm_vec_safe(add_vec(normal, make_float3(radius * cos_angle, radius * sin_angle, z))); // add to normal vector and normalise for Lambertian distribution
+    float3 diffuse_ray = norm_vec_safe(add_vec(normal, make_float3(radius * cos_angle, radius * sin_angle, z))); // add to normal vector and normalise for Lambertian distribution
+    *pdf_value = (1 - smoothness) * vec_dot_prod(diffuse_ray, normal) / CUDART_PI_F;
+    return diffuse_ray;
 }
 
 __device__ static __forceinline__ float calc_term_threshold(float3 throughput) {
     return 1.0f - fminf(1, fmaxf(fmaxf(throughput.x, throughput.y), throughput.z));
 }
+
+#define NEE_MAX_SMOOTHNESS 0.9
 
 /* @brief Execute one step of pathtracing for associated ray; one thread per ray
  * @param ray_dirs Array of all ray direction vectors
@@ -294,20 +308,18 @@ __device__ static __forceinline__ float calc_term_threshold(float3 throughput) {
  * @param first_step Flag to optionally write to buffer if light source intersected
  * @param ray_light_ints Array of bools representing if the corresponding ray intersected a light source
 */
-__global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float3* ray_origins, float3* ray_throughputs, ray_collision* last_ray_collisions, float3* ray_values, float* ray_refr_inds, curandStatePhilox4_32_10_t* rand_states, bool* next_step, bool first_step, bool do_rr, bool *ray_light_ints) {
+__global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float3* ray_origins, float3* ray_throughputs, ray_collision* last_ray_collisions, float3* ray_values, float* ray_refr_inds, float* ray_brdf_pdfs, float3* specular_rays, curandStatePhilox4_32_10_t* rand_states, bool* next_step, bool first_step, bool do_rr, bool *ray_light_ints) {
     // Find thread position in grid; corresponds to ray index
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= cur_tile_rays) return;
     curandStatePhilox4_32_10_t *rand_state = rand_states + x;
     float3 ray_origin = ray_origins[x], ray_dir = ray_dirs[x], ray_thrput = ray_throughputs[x]; // copy values for faster access
     if (zero_vec(ray_thrput)) return;
-    // Determine whether to perform NEE or BSDF sampling
     ray_collision last_ray_collision = last_ray_collisions[x];
-    bool do_nee = !first_step && materials_data.transparencies[objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]] == 0;
-    // if (!first_step && do_nee) printf("not doing NEE! ");
-    // Sample a light source with NEE if not on the first step
-    if (do_nee) {
-        // if (!x) printf("in step, starting NEE\n");
+    int lrc_material = objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i];
+    int lrc_smoothness = materials_data.smoothnesses[lrc_material];
+    if (!first_step && lrc_smoothness < NEE_MAX_SMOOTHNESS) {
+        // Sample a light source with NEE
         int light_source_i, light_source_face_i;
         float light_source_power, light_source_face_power;
         int light_source_obj_i = find_rand_light_source(rand_state, &light_source_i, &light_source_power); // get a random light source
@@ -319,10 +331,11 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
         if (light_source_ray_rc.obj_i == light_source_obj_i && light_source_ray_rc.face_i == light_source_face_i) { // if equal to light source, add contribution
             TriangleMesh* light_source_mesh = objects_dev.meshes + light_source_obj_i;
             float2 light_source_uv = add3_vec2(light_source_mesh->uv_a[light_source_ray_rc.face_i], scale_vec2(light_source_ray_rc.u, light_source_mesh->uv_ab[light_source_ray_rc.face_i]), scale_vec2(light_source_ray_rc.v, light_source_mesh->uv_ac[light_source_ray_rc.face_i]));
+            float nee_pdf_value = light_sources_dev.norm_obj_powers[light_source_i] * light_sources_dev.norm_face_powers[light_source_i][light_source_face_i];
             ray_values[x] = add_vec(ray_values[x], multiply3_vec(scale_vec(calc_next_throughput_nee(ray_dir, objects_dev.meshes[last_ray_collision.obj_i].normals[last_ray_collision.face_i], norm_light_source_ray, objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]) *
                                                                            fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
-                                                                           light_sources_dev.norm_obj_powers[light_source_i] * // inv. of probability of selecting object
-                                                                           light_sources_dev.norm_face_powers[light_source_i][light_source_face_i] * // inv. of probability of selecting face
+                                                                           calc_dual_importance_sampling_weight(__frcp_rn(nee_pdf_value), calc_brdf_pdf_value(last_ray_collision.obj_i, last_ray_collision.face_i, ray_dir, specular_rays[x])) * // MIS weight
+                                                                           nee_pdf_value *
                                                                            __frcp_rn(vec_dot_sqr(light_source_ray)), // divide by square of distance to light
                                                                            ray_thrput), // use material BRDF and NEE ray
                                                                  objects_dev.meshes[light_source_obj_i].lightings[light_source_face_i], // use object lighting modifier
@@ -344,14 +357,18 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     float2 ray_int_uv = add3_vec2(ray_int_mesh->uv_a[ray_int.face_i], scale_vec2(ray_int.u, ray_int_mesh->uv_ab[ray_int.face_i]), scale_vec2(ray_int.v, ray_int_mesh->uv_ac[ray_int.face_i]));
     float3 texture_value = f4_to_f3(tex2D<float4>(materials_data.textures[material], ray_int_uv.x, ray_int_uv.y));
     // Check if object is a light
-    if (!do_nee && nonzero_vec(light_output)) {
+    if (nonzero_vec(light_output)) {
         // if (!x) printf("in step, the ray lived in the light\n");
-        ray_values[x] = add_vec(ray_values[x], multiply3_vec(ray_thrput, light_output, texture_value));
-        ray_light_ints[x] = true;
+        if (first_step) {
+            ray_values[x] = add_vec(ray_values[x], multiply3_vec(ray_thrput, light_output, texture_value));
+            ray_light_ints[x] = true;
+        } else ray_values[x] = add_vec(ray_values[x], scale_vec(calc_dual_importance_sampling_weight(ray_brdf_pdfs[x], calc_nee_pdf_value(ray_int.obj_i, ray_int.face_i)), multiply3_vec(ray_thrput, light_output, texture_value)));
+        ray_throughputs[x] = make_float3(0,0,0);
+        return;
     }
     // if (!x) printf("in step, the ray is figuring out its future\n");
     // Calculate new ray direction
-    float3 new_ray_dir = calc_next_ray_dir(ray_dir, &ray_int, ray_refr_inds + x, material, rand_state);
+    float3 new_ray_dir = calc_next_ray_dir(ray_dir, &ray_int, ray_refr_inds + x, material, rand_state, specular_rays + x, ray_brdf_pdfs + x);
     // Calculate new throughput with BRDF
     ray_thrput = multiply_vec(scale_vec(calc_next_throughput(ray_dir, ray_int_mesh->normals[ray_int.face_i], new_ray_dir, material), ray_thrput), // use material BRDF
                               texture_value); // load pixel from texture
@@ -409,14 +426,16 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
     CUDA_CHECK(cudaMalloc(&left_rights, pixels_per_tile * sizeof(float3)));
     CUDA_CHECK(cudaMalloc(&top_bottoms, pixels_per_tile * sizeof(float3)));
     CUDA_CHECK(cudaMalloc(&ray_dirs, rays_per_tile * sizeof(float3)));
-    float3 *ray_origins, *ray_throughputs, *ray_values;
+    float3 *specular_rays, *ray_origins, *ray_throughputs, *ray_values;
+    CUDA_CHECK(cudaMalloc(&specular_rays, rays_per_tile * sizeof(float3)));
     CUDA_CHECK(cudaMalloc(&ray_origins, rays_per_tile * sizeof(float3)));
     CUDA_CHECK(cudaMalloc(&ray_throughputs, rays_per_tile * sizeof(float3)));
     CUDA_CHECK(cudaMalloc(&ray_values, rays_per_tile * sizeof(float3)));
     ray_collision* last_ray_collisions;
     CUDA_CHECK(cudaMalloc(&last_ray_collisions, rays_per_tile * sizeof(ray_collision)));
-    float* ray_refr_inds;
+    float *ray_refr_inds, *ray_brdf_pdfs;
     CUDA_CHECK(cudaMalloc(&ray_refr_inds, rays_per_tile * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&ray_brdf_pdfs, rays_per_tile * sizeof(float)));
     bool* ray_light_ints;
     CUDA_CHECK(cudaMalloc(&ray_light_ints, rays_per_tile * sizeof(bool)));
     bool *next_step, next_step_cpy;
@@ -459,7 +478,7 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
         // Initialise remaining buffers
         {
             int block_size = 512;
-            initialise_ray_buffers<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, cam_pos, ray_origins, ray_throughputs, ray_values, ray_refr_inds, ray_light_ints);
+            initialise_ray_buffers<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, cam_pos, specular_rays, ray_origins, ray_throughputs, ray_values, ray_refr_inds, ray_light_ints);
         }
         CUDA_CHECK(cudaGetLastError());
         // Execute path tracing steps until all rays die
@@ -468,7 +487,7 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
             // Run pathtracing step
             CUDA_CHECK(cudaMemset(next_step, 0, sizeof(bool)));
             int block_size = 32;
-            pathtrace_step<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, ray_dirs, ray_origins, ray_throughputs, last_ray_collisions, ray_values, ray_refr_inds, rand_states, next_step, !steps, steps > 5, ray_light_ints);
+            pathtrace_step<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, ray_dirs, ray_origins, ray_throughputs, last_ray_collisions, ray_values, ray_refr_inds, ray_brdf_pdfs, specular_rays, rand_states, next_step, !steps, steps > 5, ray_light_ints);
             CUDA_CHECK(cudaGetLastError());
             // Check if next step required
             CUDA_CHECK(cudaMemcpy(&next_step_cpy, next_step, sizeof(bool), cudaMemcpyDeviceToHost));
@@ -488,11 +507,13 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
     CUDA_CHECK(cudaFree(left_rights));
     CUDA_CHECK(cudaFree(top_bottoms));
     CUDA_CHECK(cudaFree(ray_dirs));
+    CUDA_CHECK(cudaFree(specular_rays));
     CUDA_CHECK(cudaFree(ray_origins));
     CUDA_CHECK(cudaFree(ray_throughputs));
     CUDA_CHECK(cudaFree(ray_values));
     CUDA_CHECK(cudaFree(last_ray_collisions));
     CUDA_CHECK(cudaFree(ray_refr_inds));
+    CUDA_CHECK(cudaFree(ray_brdf_pdfs));
     CUDA_CHECK(cudaFree(ray_light_ints));
     CUDA_CHECK(cudaFree(next_step));
     // fputs("finished freeing, exiting\n", stderr);
