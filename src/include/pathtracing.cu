@@ -1,5 +1,4 @@
 #include "pathtracing.h"
-#include <curand_kernel.h>
 #include <math_constants.h>
 #include <stdbool.h>
 #include "bvh.h"
@@ -10,11 +9,11 @@
 #include "lighting.h"
 #include "constants.h"
 
-typedef struct {
+struct ray_collision {
     float3 pos;
     int obj_i, face_i;
     float u, v;
-} ray_collision;
+};
 
 typedef struct {
     ray_collision rc;
@@ -413,56 +412,58 @@ __global__ static void calc_pixels(int tile, int rays_per_pixel, int pixels_per_
     light_ints[x] = light_acc * div_rays_per_pixel;
 }
 
-void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, float* light_ints,
-               int x_res, int y_res, int pixel_ray_grid_dim, int pixels_per_tile, int ray_bounce_limit, float x_fov) {
-    int total_pixels = x_res * y_res;
-    int rays_per_pixel = pixel_ray_grid_dim * pixel_ray_grid_dim;
-    int rays_per_tile = rays_per_pixel * pixels_per_tile;
+PathtraceBuffers* init_pathtrace(int x_res, int y_res, int pixel_ray_grid_dim, int pixels_per_tile) {
+    PathtraceBuffers* buffers = (PathtraceBuffers*) malloc(sizeof(PathtraceBuffers));
+    buffers->x_res = x_res;
+    buffers->y_res = y_res;
+    buffers->pixel_ray_grid_dim = pixel_ray_grid_dim;
+    buffers->pixels_per_tile = pixels_per_tile;
+    buffers->total_pixels = x_res * y_res;
+    buffers->rays_per_pixel = pixel_ray_grid_dim * pixel_ray_grid_dim;
+    buffers->rays_per_tile = buffers->rays_per_pixel * pixels_per_tile;
     // Allocate all buffers before execution to allow for tiling
-    curandStatePhilox4_32_10_t* rand_states;
-    CUDA_CHECK(cudaMalloc(&rand_states, rays_per_tile * sizeof(curandStatePhilox4_32_10_t)));
-    float3 *top_left_corners, *left_rights, *top_bottoms, *ray_dirs;
-    CUDA_CHECK(cudaMalloc(&top_left_corners, pixels_per_tile * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&left_rights, pixels_per_tile * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&top_bottoms, pixels_per_tile * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_dirs, rays_per_tile * sizeof(float3)));
-    float3 *specular_rays, *ray_origins, *ray_throughputs, *ray_values;
-    CUDA_CHECK(cudaMalloc(&specular_rays, rays_per_tile * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_origins, rays_per_tile * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_throughputs, rays_per_tile * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&ray_values, rays_per_tile * sizeof(float3)));
-    ray_collision* last_ray_collisions;
-    CUDA_CHECK(cudaMalloc(&last_ray_collisions, rays_per_tile * sizeof(ray_collision)));
-    float *ray_refr_inds, *ray_brdf_pdfs;
-    CUDA_CHECK(cudaMalloc(&ray_refr_inds, rays_per_tile * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&ray_brdf_pdfs, rays_per_tile * sizeof(float)));
-    bool* ray_light_ints;
-    CUDA_CHECK(cudaMalloc(&ray_light_ints, rays_per_tile * sizeof(bool)));
-    bool *next_step, next_step_cpy;
-    CUDA_CHECK(cudaMalloc(&next_step, sizeof(bool)));
+    CUDA_CHECK(cudaMalloc(&buffers->rand_states, buffers->rays_per_tile * sizeof(curandStatePhilox4_32_10_t)));
+    CUDA_CHECK(cudaMalloc(&buffers->top_left_corners, pixels_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->left_rights, pixels_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->top_bottoms, pixels_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_dirs, buffers->rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->specular_rays, buffers->rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_origins, buffers->rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_throughputs, buffers->rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_values, buffers->rays_per_tile * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&buffers->last_ray_collisions, buffers->rays_per_tile * sizeof(ray_collision)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_refr_inds, buffers->rays_per_tile * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_brdf_pdfs, buffers->rays_per_tile * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&buffers->ray_light_ints, buffers->rays_per_tile * sizeof(bool)));
+    CUDA_CHECK(cudaMalloc(&buffers->next_step, sizeof(bool)));
+    return buffers;
+}
+
+void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, float* light_ints, PathtraceBuffers* buffers, int ray_bounce_limit, float x_fov) {
+    bool next_step_cpy; // host copy of next step flag
     // Calculate view vectors
     float x_scale = tanf(x_fov * 0.5);
     float3 view_x_dir = scale_vec(x_scale, norm_vec(vec_cross_prod(cam_dir, cam_up)));
-    float3 view_y_dir = scale_vec(x_scale * y_res / x_res, norm_vec(vec_cross_prod(cam_dir, view_x_dir)));
+    float3 view_y_dir = scale_vec(x_scale * buffers->y_res / buffers->x_res, norm_vec(vec_cross_prod(cam_dir, view_x_dir)));
     // Initialise RNG states
     {
         int block_size = 512;
-        initialise_rand_states<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(CUDA_RAND_SEED, rays_per_tile, rand_states);
+        initialise_rand_states<<<(buffers->rays_per_tile + block_size - 1) / block_size, block_size>>>(CUDA_RAND_SEED, buffers->rays_per_tile, buffers->rand_states);
     }
     CUDA_CHECK(cudaGetLastError());
-    int num_tiles = (total_pixels + pixels_per_tile - 1) / pixels_per_tile, cur_tile_pixels, cur_tile_rays;
+    int num_tiles = (buffers->total_pixels + buffers->pixels_per_tile - 1) / buffers->pixels_per_tile, cur_tile_pixels, cur_tile_rays;
     // fprintf(stderr, "total pixles %d, tile pixels %d, num tiles %d\n", total_pixels, pixels_per_tile, num_tiles);
     for (int tile = 0; tile < num_tiles; tile++) {
-        cur_tile_pixels = min(pixels_per_tile, total_pixels - tile * pixels_per_tile);
-        cur_tile_rays = cur_tile_pixels * rays_per_pixel;
+        cur_tile_pixels = min(buffers->pixels_per_tile, buffers->total_pixels - tile * buffers->pixels_per_tile);
+        cur_tile_rays = cur_tile_pixels * buffers->rays_per_pixel;
         // fprintf(stderr, "doing tile %d of %d, %d pixels and %d rays in tile\n", tile, num_tiles, cur_tile_pixels, cur_tile_rays);
         // Initialise initial rays
         {
             dim3 block_dim;
             block_dim.x = 64; // coalesce writes within 1D block
             dim3 grid_dim;
-            grid_dim.x = (pixels_per_tile + block_dim.x - 1) / block_dim.x;
-            calc_pixel_rays<<<grid_dim, block_dim>>>(tile, cur_tile_pixels, pixels_per_tile, total_pixels, x_res / 2, y_res / 2, x_res, pixel_ray_grid_dim, cam_dir, view_x_dir, view_y_dir, top_left_corners, left_rights, top_bottoms);
+            grid_dim.x = (buffers->pixels_per_tile + block_dim.x - 1) / block_dim.x;
+            calc_pixel_rays<<<grid_dim, block_dim>>>(tile, cur_tile_pixels, buffers->pixels_per_tile, buffers->total_pixels, buffers->x_res / 2, buffers->y_res / 2, buffers->x_res, buffers->pixel_ray_grid_dim, cam_dir, view_x_dir, view_y_dir, buffers->top_left_corners, buffers->left_rights, buffers->top_bottoms);
         }
         CUDA_CHECK(cudaGetLastError());
         {
@@ -470,52 +471,53 @@ void pathtrace(float3 cam_pos, float3 cam_up, float3 cam_dir, float3* pixels, fl
             block_dim.x = 16; // ensure that block is fully utilised with small number of samples per pixel
             block_dim.y = 16;
             dim3 grid_dim;
-            grid_dim.x = (rays_per_pixel + block_dim.x - 1) / block_dim.x;
-            grid_dim.y = (pixels_per_tile + block_dim.y - 1) / block_dim.y;
-            calc_pixel_samples<<<grid_dim, block_dim>>>(cur_tile_pixels, rays_per_pixel, pixel_ray_grid_dim, top_left_corners, left_rights, top_bottoms, ray_dirs, rand_states);
+            grid_dim.x = (buffers->rays_per_pixel + block_dim.x - 1) / block_dim.x;
+            grid_dim.y = (buffers->pixels_per_tile + block_dim.y - 1) / block_dim.y;
+            calc_pixel_samples<<<grid_dim, block_dim>>>(cur_tile_pixels, buffers->rays_per_pixel, buffers->pixel_ray_grid_dim, buffers->top_left_corners, buffers->left_rights, buffers->top_bottoms, buffers->ray_dirs, buffers->rand_states);
         }
         CUDA_CHECK(cudaGetLastError());
         // Initialise remaining buffers
         {
             int block_size = 512;
-            initialise_ray_buffers<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, cam_pos, specular_rays, ray_origins, ray_throughputs, ray_values, ray_refr_inds, ray_light_ints);
+            initialise_ray_buffers<<<(buffers->rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, cam_pos, buffers->specular_rays, buffers->ray_origins, buffers->ray_throughputs, buffers->ray_values, buffers->ray_refr_inds, buffers->ray_light_ints);
         }
         CUDA_CHECK(cudaGetLastError());
         // Execute path tracing steps until all rays die
         next_step_cpy = true;
         for (int steps = 0; next_step_cpy && steps < ray_bounce_limit; steps++) {
             // Run pathtracing step
-            CUDA_CHECK(cudaMemset(next_step, 0, sizeof(bool)));
+            CUDA_CHECK(cudaMemset(buffers->next_step, 0, sizeof(bool)));
             int block_size = 32;
-            pathtrace_step<<<(rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, ray_dirs, ray_origins, ray_throughputs, last_ray_collisions, ray_values, ray_refr_inds, ray_brdf_pdfs, specular_rays, rand_states, next_step, !steps, steps > 5, ray_light_ints);
+            pathtrace_step<<<(buffers->rays_per_tile + block_size - 1) / block_size, block_size>>>(cur_tile_rays, buffers->ray_dirs, buffers->ray_origins, buffers->ray_throughputs, buffers->last_ray_collisions, buffers->ray_values, buffers->ray_refr_inds, buffers->ray_brdf_pdfs, buffers->specular_rays, buffers->rand_states, buffers->next_step, !steps, steps > 5, buffers->ray_light_ints);
             CUDA_CHECK(cudaGetLastError());
             // Check if next step required
-            CUDA_CHECK(cudaMemcpy(&next_step_cpy, next_step, sizeof(bool), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(&next_step_cpy, buffers->next_step, sizeof(bool), cudaMemcpyDeviceToHost));
             // fprintf(stderr, "finished bounce %d, next_step %d\n", steps, next_step_cpy);
         }
         CUDA_CHECK(cudaGetLastError());
         // Average final ray samples to produce final pixel values
         {
             int block_size = 512;
-            calc_pixels<<<(pixels_per_tile + block_size - 1) / block_size, block_size>>>(tile, rays_per_pixel, pixels_per_tile, cur_tile_pixels, ray_values, ray_light_ints, pixels, light_ints);
+            calc_pixels<<<(buffers->pixels_per_tile + block_size - 1) / block_size, block_size>>>(tile, buffers->rays_per_pixel, buffers->pixels_per_tile, cur_tile_pixels, buffers->ray_values, buffers->ray_light_ints, pixels, light_ints);
         }
         CUDA_CHECK(cudaGetLastError());
     }
-    // Free buffers
-    CUDA_CHECK(cudaFree(rand_states));
-    CUDA_CHECK(cudaFree(top_left_corners));
-    CUDA_CHECK(cudaFree(left_rights));
-    CUDA_CHECK(cudaFree(top_bottoms));
-    CUDA_CHECK(cudaFree(ray_dirs));
-    CUDA_CHECK(cudaFree(specular_rays));
-    CUDA_CHECK(cudaFree(ray_origins));
-    CUDA_CHECK(cudaFree(ray_throughputs));
-    CUDA_CHECK(cudaFree(ray_values));
-    CUDA_CHECK(cudaFree(last_ray_collisions));
-    CUDA_CHECK(cudaFree(ray_refr_inds));
-    CUDA_CHECK(cudaFree(ray_brdf_pdfs));
-    CUDA_CHECK(cudaFree(ray_light_ints));
-    CUDA_CHECK(cudaFree(next_step));
-    // fputs("finished freeing, exiting\n", stderr);
-    CUDA_CHECK(cudaGetLastError());
+}
+
+void free_pathtrace(PathtraceBuffers* buffers) {
+    CUDA_CHECK(cudaFree(buffers->rand_states));
+    CUDA_CHECK(cudaFree(buffers->top_left_corners));
+    CUDA_CHECK(cudaFree(buffers->left_rights));
+    CUDA_CHECK(cudaFree(buffers->top_bottoms));
+    CUDA_CHECK(cudaFree(buffers->ray_dirs));
+    CUDA_CHECK(cudaFree(buffers->specular_rays));
+    CUDA_CHECK(cudaFree(buffers->ray_origins));
+    CUDA_CHECK(cudaFree(buffers->ray_throughputs));
+    CUDA_CHECK(cudaFree(buffers->ray_values));
+    CUDA_CHECK(cudaFree(buffers->last_ray_collisions));
+    CUDA_CHECK(cudaFree(buffers->ray_refr_inds));
+    CUDA_CHECK(cudaFree(buffers->ray_brdf_pdfs));
+    CUDA_CHECK(cudaFree(buffers->ray_light_ints));
+    CUDA_CHECK(cudaFree(buffers->next_step));
+    free(buffers);
 }

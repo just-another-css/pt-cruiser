@@ -94,15 +94,14 @@ static void get_key_input(GLFWwindow* window, RenderParameters* params, float3* 
     ));
 }
 
-static void render_frame(RenderParameters params, char* img_output) {
+static void render_frame(RenderParameters params, PathtraceBuffers* pathtrace_buffers, char* img_output) {
     size_t num_bytes;
     if (params.use_opengl) {
         CUDA_CHECK(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
         CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void **) &fb.ldr_buf, &num_bytes, cuda_pbo_resource));
     }
 
-    pathtrace(params.cam_pos, params.cam_up, params.cam_dir, fb.hdr_buf, fb.light_mask,
-        params.x_res, params.y_res, params.pixel_ray_grid_dim, params.pixels_per_tile, params.ray_bounce_limit, params.x_fov);
+    pathtrace(params.cam_pos, params.cam_up, params.cam_dir, fb.hdr_buf, fb.light_mask, pathtrace_buffers, params.ray_bounce_limit, params.x_fov);
 
     /* postprocessing: denoise -> bloom -> tonemap -> gamma -> ldr_buf */
     postprocess_run(&fb, &ds, params.use_denoising, params.use_bloom);
@@ -184,9 +183,9 @@ int main(int argc, char **argv) {
     }
     
     init_device(num_objects, meshes);
-    
-    float3 cam_translation, cam_rotation;
+    PathtraceBuffers* pathtrace_buffers = init_pathtrace(params.x_res, params.y_res, params.pixel_ray_grid_dim, params.pixels_per_tile);
 
+    float3 cam_translation, cam_rotation;
     int frame_count = 0;
     bool loaded_camera_path = cam_path && params.use_cam_path, trace_camera_path = loaded_camera_path && params.start_cam_path, build_camera_path = false;
     if (trace_camera_path) {
@@ -279,7 +278,7 @@ trace:              trace_camera_path = trace_path(cam_path, params.cam_path_fra
                 }
             }
             move_cam(&params, cam_translation, cam_rotation);
-            render_frame(params, nvjpeg_frame_output);
+            render_frame(params, pathtrace_buffers, nvjpeg_frame_output);
             glfwSwapBuffers(window);
             glfwPollEvents();
             if (use_frametime) {
@@ -293,7 +292,7 @@ trace:              trace_camera_path = trace_path(cam_path, params.cam_path_fra
     } else {
         do {
 repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
-            render_frame(params, params.nvjpeg_output);
+            render_frame(params, pathtrace_buffers, params.nvjpeg_output);
             if (use_frametime) {
                 calc_frametime(&prev, &cur, &frametime, params.show_frametime);
                 if (params.cam_path_framerate) cam_path_fps_scale = frametime / cam_path_frametime;
@@ -305,6 +304,7 @@ repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path =
         } while (++frame_count < params.num_frames);
     }
     
+    free_pathtrace(pathtrace_buffers);
     if (cam_path) free_path(cam_path);
     clean_device();
     if (params.use_opengl) clean_opengl();
