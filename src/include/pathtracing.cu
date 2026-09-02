@@ -102,9 +102,7 @@ __device__ static ray_collision find_first_collision(float3 ray_origin, float3 r
     rct.t = FLT_MAX; // any collision will be closer
     bvh_stack[0] = 0; // start at root node
     bvh_stack_t[0] = intersect_bounding_boxes(ray_origin, ray_dir, bvh_dev.aabbs.pt_min[0], bvh_dev.aabbs.pt_max[0]);
-    // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, starting ffc-ing\n");
     while (stack_i >= 0) {
-        // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, at stack %d\n", stack_i);
         if (stack_i > 60) printf("WARNING: TALL STACK - %d\n", stack_i);
         if (stack_i >= 62) {
             printf("FAILURE: TOO TALL STACK - %d; exiting with t %f\n", stack_i, rct.t);
@@ -112,21 +110,14 @@ __device__ static ray_collision find_first_collision(float3 ray_origin, float3 r
             return rct.rc;
         }
         int i = bvh_stack[stack_i];
-        // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, got node %d\n", i);
         float t = bvh_stack_t[stack_i--];
-        // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("we made it here (accessing bvh_stack_t) without segfaulting, index is %d\n", i);
         if (t >= rct.t) continue;
-        // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("making an access to mesh_index (which is p) at address p (fake)\n");
         int obj_i = bvh_dev.mesh_index[i]; 
-        // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("we checked bvh dev mesh index at index %d and got obj_i %d \n", i, obj_i);
         if (obj_i >= 0) { // leaf node
-            // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, found a leaf!! the greenery is beautiful\n");
             int face_i = bvh_dev.triangle_index[i];
             float u, v;
             float t_int = find_triangle_intersection(ray_origin, ray_dir, objects_dev.meshes + obj_i, obj_i, face_i, &u, &v);
-            // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, the greenery about yey far away: %f\n", t_int);
             if (t_int < rct.t) {
-                // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, the greenery is pretty close, %f\n", t_int);
                 rct.t = t_int;
                 rct.rc.obj_i = obj_i;
                 rct.rc.face_i = face_i;
@@ -134,11 +125,9 @@ __device__ static ray_collision find_first_collision(float3 ray_origin, float3 r
                 rct.rc.v = v;
             }
         } else { // parent node
-            // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, found a parent, i guess...\n");
             int left = bvh_dev.left_child_index[i], right = bvh_dev.right_child_index[i];
             float left_t = intersect_bounding_boxes(ray_origin, ray_dir, bvh_dev.aabbs.pt_min[left], bvh_dev.aabbs.pt_max[left]);
             float right_t = intersect_bounding_boxes(ray_origin, ray_dir, bvh_dev.aabbs.pt_min[right], bvh_dev.aabbs.pt_max[right]);
-            // if (blockIdx.x * blockDim.x + threadIdx.x == 0) printf("in ffc, collided with children (suspicious)\n");
             bool use_left = left_t < rct.t;
             bool use_right = right_t < rct.t;
             if (!use_left && !use_right) continue;
@@ -326,7 +315,6 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
         float3 light_source_normal = f4_to_f3(objects_dev.meshes[light_source_i].normals[light_source_face_i]);
         float3 norm_light_source_ray = norm_vec(light_source_ray);
         ray_collision light_source_ray_rc = find_first_collision(ray_origin, norm_light_source_ray); // check first object in ray direction
-        // if (!x) printf("in step, sampled, applying\n");
         if (light_source_ray_rc.obj_i == light_source_obj_i && light_source_ray_rc.face_i == light_source_face_i) { // if equal to light source, add contribution
             TriangleMesh* light_source_mesh = objects_dev.meshes + light_source_obj_i;
             float2 light_source_uv = add3_vec2(light_source_mesh->uv_a[light_source_ray_rc.face_i], scale_vec2(light_source_ray_rc.u, light_source_mesh->uv_ab[light_source_ray_rc.face_i]), scale_vec2(light_source_ray_rc.v, light_source_mesh->uv_ac[light_source_ray_rc.face_i]));
@@ -341,7 +329,6 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
                                                                  f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
         }
     }
-    // if (!x) printf("in step, starting pathtracing\n");
     // Find current ray intersection
     ray_collision ray_int = find_first_collision(ray_origin, ray_dir);
     if (ray_int.obj_i == -1) { // ray extends to infinity
@@ -350,14 +337,12 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     }
     TriangleMesh *ray_int_mesh = objects_dev.meshes + ray_int.obj_i;
     int material = ray_int_mesh->materials[ray_int.face_i];
-    // if (!x) printf("in step, the ray lived!!");
     float3 light_output = objects_dev.meshes[ray_int.obj_i].lightings[ray_int.face_i];
     // Calculate normalised UV coordinate for texture sampling
     float2 ray_int_uv = add3_vec2(ray_int_mesh->uv_a[ray_int.face_i], scale_vec2(ray_int.u, ray_int_mesh->uv_ab[ray_int.face_i]), scale_vec2(ray_int.v, ray_int_mesh->uv_ac[ray_int.face_i]));
     float3 texture_value = f4_to_f3(tex2D<float4>(materials_data.textures[material], ray_int_uv.x, ray_int_uv.y));
     // Check if object is a light
     if (nonzero_vec(light_output)) {
-        // if (!x) printf("in step, the ray lived in the light\n");
         if (first_step) {
             ray_values[x] = add_vec(ray_values[x], multiply3_vec(ray_thrput, light_output, texture_value));
             ray_light_ints[x] = true;
@@ -365,19 +350,13 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
         ray_throughputs[x] = make_float3(0,0,0);
         return;
     }
-    // if (!x) printf("in step, the ray is figuring out its future\n");
     // Calculate new ray direction
     float3 new_ray_dir = calc_next_ray_dir(ray_dir, &ray_int, ray_refr_inds + x, material, rand_state, specular_rays + x, ray_brdf_pdfs + x);
     // Calculate new throughput with BRDF
     ray_thrput = multiply_vec(scale_vec(calc_next_throughput(ray_dir, ray_int_mesh->normals[ray_int.face_i], new_ray_dir, material), ray_thrput), // use material BRDF
                               texture_value); // load pixel from texture
-    // if (!x) printf("in step, the ray is moving on");
     // Russian roulette
     float term_thrshld = calc_term_threshold(ray_thrput); // calculate probability threshold for termination
-    // if (curand_uniform(rand_state) < term_thrshld) {
-    //     // if (!x) printf("in step, the ray died, so sad\n");
-    //     return;
-    // }
     if (do_rr) {
         if (curand_uniform(rand_state) < term_thrshld) { // ray killed, early exit
             ray_throughputs[x] = make_float3(0,0,0);
@@ -385,13 +364,11 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
         }
         scale_vec_ip(__frcp_rn(1 - term_thrshld), &ray_thrput); // account for killed rays
     }
-    // if (!x) printf("in step, the ray has mourned\n");
     // Assign new ray dir/pos/throughput for next step
     ray_dirs[x] = new_ray_dir;
     ray_origins[x] = ray_int.pos;
     ray_throughputs[x] = ray_thrput;
     last_ray_collisions[x] = ray_int;
-    // if (!x) printf("in step, the ray has spoken (written but same thing)\n");
     // Signal to host to continue pathtracing
     *next_step = true;
 }

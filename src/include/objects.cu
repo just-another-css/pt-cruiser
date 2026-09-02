@@ -148,10 +148,7 @@ void initialise_objects(int num_objects, PointsMesh* meshes, int** light_source_
 void free_objects(void) {
     TriangleObjects objects_dev_cpy;
     CUDA_CHECK(cudaMemcpyFromSymbol(&objects_dev_cpy, objects_dev, sizeof(TriangleObjects)));
-    for (int obj = 0; obj < objects.num_objects; obj++) {
-        free_triangle_mesh(objects.meshes[obj]);
-        // free_triangle_mesh(objects_dev_cpy.meshes[obj]); double free as memcpy meshes pointers previously
-    }
+    for (int obj = 0; obj < objects.num_objects; obj++) free_triangle_mesh(objects.meshes[obj]);
     free(objects.meshes);
     cudaFree(objects_dev_cpy.meshes);
 }
