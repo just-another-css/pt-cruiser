@@ -17,3 +17,7 @@ web-ui/subprocess
 # Exclude nvJPEG output
 *.jpeg
 *.jpg
+
+# Exclude Nsight results
+*.ncu-rep
+*.nsys-rep
