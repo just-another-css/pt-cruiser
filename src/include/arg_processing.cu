@@ -184,7 +184,7 @@ set_image:              process_filepath_arg(argc, argv, &i, &params->nvjpeg_out
                         break;
                     case 'q':
                         if (arg[2]) goto invalid_option;
-set_image_quality:      process_int_arg(argc, argv, &i, &params->image_quality, &assigned_params.image_quality, 0, 100);
+set_image_quality:      process_int_arg(argc, argv, &i, &params->image_quality, &assigned_params.image_quality, 1, 100);
                         break;
                     default:
                         goto invalid_option;
