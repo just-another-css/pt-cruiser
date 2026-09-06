@@ -13,6 +13,7 @@ extern char* default_material_names[];
 #define LIGHT_SOURCE_REFRACTIVE_INDEX 0
 #define LIGHT_SOURCE_SMOOTHNESS 0
 #define LIGHT_SOURCE_ROUGHNESS 0
+#define LIGHT_SOURCE_LIGHTING 10
 
 // Constants for glass
 #define GLASS_TRANSPARENCY 0.95
@@ -20,6 +21,7 @@ extern char* default_material_names[];
 #define GLASS_REFRACTIVE_INDEX 1.5
 #define GLASS_SMOOTHNESS 1
 #define GLASS_ROUGHNESS 0.01
+#define GLASS_LIGHTING 0
 #define GLASS_NORMAL_REFLECTION 0.04
 
 // Constants for metal
@@ -28,6 +30,7 @@ extern char* default_material_names[];
 #define METAL_REFRACTIVE_INDEX 0
 #define METAL_SMOOTHNESS 0.65
 #define METAL_ROUGHNESS 0.5
+#define METAL_LIGHTING 0
 #define METAL_NORMAL_REFLECTION 0.9
 
 // Constants for diffuse
@@ -36,6 +39,7 @@ extern char* default_material_names[];
 #define DIFFUSE_REFRACTIVE_INDEX 0
 #define DIFFUSE_SMOOTHNESS 0
 #define DIFFUSE_ROUGHNESS 0
+#define DIFFUSE_LIGHTING 0
 
 #ifdef __CUDACC__
 
@@ -46,7 +50,7 @@ typedef struct {
 
 extern __constant__ MaterialData materials_data;
 
-extern void load_default_material(int material, char** texture_path, float* transparency, float* crit_angle, float* refr_index, float* smoothness, float* roughness);
+extern void load_default_material(int material, char** texture_path, float* transparency, float* crit_angle, float* refr_index, float* smoothness, float* roughness, float* lighting);
 extern void initialise_materials_data(char** texture_paths, float* transparencies, float* crit_angles, float* refr_indices, float* smoothnesses, float* roughnesses, int num_materials);
 extern void initialise_material_texture(int material_i, char* texture_path);
 

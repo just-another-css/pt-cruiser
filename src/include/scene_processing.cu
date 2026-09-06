@@ -72,10 +72,70 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
     // Process material names
     char** material_names = (char**) malloc(scene.mat_len * sizeof(char*));
     for (int i = 0; i < scene.mat_len; i++) material_names[i] = scene.materials[i].name;
-    bool* use_default_materials = (bool*) malloc(NUM_DEFAULT_MATERIALS * sizeof(bool));
-    memset(use_default_materials, 0, NUM_DEFAULT_MATERIALS * sizeof(bool));
-    int* default_material_is = (int*) malloc(NUM_DEFAULT_MATERIALS * sizeof(int));
-    int num_total_materials = scene.mat_len; // counts explicit and default materials; add default materials after all explicitly specified materials
+    int num_total_materials = scene.mat_len + NUM_DEFAULT_MATERIALS; // counts explicit and default materials; add default materials after all explicitly specified materials
+
+    // Process materials
+    char** texture_paths = (char**) malloc(num_total_materials * sizeof(char*));
+    float* transparencies = (float*) malloc(num_total_materials * sizeof(float)),
+        *crit_angles = (float*) malloc(num_total_materials * sizeof(float)),
+        *refr_indices = (float*) malloc(num_total_materials * sizeof(float)),
+        *smoothnesses = (float*) malloc(num_total_materials * sizeof(float)),
+        *roughnesses = (float*) malloc(num_total_materials * sizeof(float)),
+        *material_lightings = (float*) malloc(num_total_materials * sizeof(float)); // temporary array used to assign material lighting values to meshes
+    for (int i = scene.mat_len, j = 0; i < num_total_materials; i++, j++) load_default_material(j, texture_paths + i, transparencies + i, crit_angles + i, refr_indices + i, smoothnesses + i, roughnesses + i, NULL);
+    for (int i = 0; i < scene.mat_len; i++) { // Set parameters for explicitly defined materials
+        if (scene.materials[i].base) { // use base material for any unassigned parameters
+            int base_i = find_material(scene.materials[i].base, material_names, i);
+            bool material_loaded = false;
+            if (base_i == INVALID_MATERIAL) { // base material is not a custom material defined before the current material
+                int default_mat_i = find_material(scene.materials[i].base, default_material_names, NUM_DEFAULT_MATERIALS);
+                if (default_mat_i != INVALID_MATERIAL) { // base material found as default material
+                    load_default_material(default_mat_i, texture_paths + i, transparencies + i, crit_angles + i, refr_indices + i, smoothnesses + i, roughnesses + i, NULL); // load default material directly and skip loading later
+                    material_loaded = true;
+                }
+            }
+            if (!material_loaded) { // base material has not been loaded directly; copy from existing material
+                if (base_i == INVALID_MATERIAL) { // base material was never found and was not loaded directly
+                    fprintf(stderr, "[!] Material #%d '%s' uses nonexistent base material '%s'", i, scene.materials[i].name, scene.materials[i].base);
+                    exit(EXIT_FAILURE);
+                }
+                texture_paths[i] = texture_paths[base_i];
+                transparencies[i] = transparencies[base_i];
+                crit_angles[i] = crit_angles[base_i];
+                refr_indices[i] = refr_indices[base_i];
+                smoothnesses[i] = smoothnesses[base_i];
+                roughnesses[i] = roughnesses[base_i];
+                material_lightings[i] = material_lightings[base_i];
+            }
+            if (scene.materials[i].args) { // at least some parameters have been changed from base material
+                if (scene.materials[i].args->texture_path != NULL) texture_paths[i] = scene.materials[i].args->texture_path;
+                if (scene.materials[i].args->transparency != UNASSIGNED) transparencies[i] = scene.materials[i].args->transparency;
+                if (scene.materials[i].args->crit_angle != UNASSIGNED) crit_angles[i] = scene.materials[i].args->crit_angle;
+                if (scene.materials[i].args->refr_index != UNASSIGNED) refr_indices[i] = scene.materials[i].args->refr_index;
+                if (scene.materials[i].args->smoothness != UNASSIGNED) smoothnesses[i] = scene.materials[i].args->smoothness;
+                if (scene.materials[i].args->roughness != UNASSIGNED) roughnesses[i] = scene.materials[i].args->roughness;
+                if (scene.materials[i].args->lighting != UNASSIGNED) material_lightings[i] = scene.materials[i].args->lighting;
+            }
+        } else { // no base material, default to zero
+            if (!scene.materials[i].args) {
+                fprintf(stderr, "[!] Material #%d '%s' has no provided arguments and no base material", i, scene.materials[i].name);
+                exit(EXIT_FAILURE);
+            }
+            if (scene.materials[i].args->texture_path != NULL) texture_paths[i] = scene.materials[i].args->texture_path;
+            else {
+                fprintf(stderr, "[!] Material #%d '%s' has no provided texture and no base material", i, scene.materials[i].name);
+                exit(EXIT_FAILURE);
+            }
+            transparencies[i] = scene.materials[i].args->transparency != UNASSIGNED ? scene.materials[i].args->transparency : 0;
+            crit_angles[i] = scene.materials[i].args->crit_angle != UNASSIGNED ? scene.materials[i].args->crit_angle : 0;
+            refr_indices[i] = scene.materials[i].args->refr_index != UNASSIGNED ? scene.materials[i].args->refr_index : 0;
+            smoothnesses[i] = scene.materials[i].args->smoothness != UNASSIGNED ? scene.materials[i].args->smoothness : 0;
+            roughnesses[i] = scene.materials[i].args->roughness != UNASSIGNED ? scene.materials[i].args->roughness : 0;
+            material_lightings[i] = scene.materials[i].args->lighting != UNASSIGNED ? scene.materials[i].args->lighting : 0;
+        }
+    }
+    initialise_materials_data(texture_paths, transparencies, crit_angles, refr_indices, smoothnesses, roughnesses, num_total_materials); // Copy material data to device and load textures
+
     // Process objects
     *num_objects = scene.obj_len;
     *mesh = (PointsMesh*) malloc(scene.obj_len * sizeof(PointsMesh));
@@ -114,11 +174,6 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                             fprintf(stderr, "[!] Unidentified material '%s' used in object %d", scene.objects[i].desc_args->args[a].material, i);
                             exit(EXIT_FAILURE);
                         }
-                        if (!use_default_materials[object_material]) {
-                            use_default_materials[object_material] = true;
-                            default_material_is[object_material] = num_total_materials++;
-                        }
-                        object_material = default_material_is[object_material];
                     }
                     object_material_set = true;
                     break;
@@ -138,11 +193,15 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                     break;
             }
         }
+        if (object_material_set && !object_lighting_set) {
+            float intensity = material_lightings[object_material];
+            object_lighting = make_float3(intensity, intensity, intensity);
+        }
         for (int tri = 0; tri < num_triangles; tri++) {
             (*mesh)[i].a[tri] = scene.objects[i].faces->faces[tri].fst;
             (*mesh)[i].b[tri] = scene.objects[i].faces->faces[tri].snd;
             (*mesh)[i].c[tri] = scene.objects[i].faces->faces[tri].thr;
-            bool material_flag = false, lighting_flag = false, uv_flag = false;
+            bool material_set = false, lighting_set = false, uv_set = false;
             float intensity;
             for (int a = 0; a < scene.objects[i].faces->faces[tri].desc_args->len; a++) {
                 switch (scene.objects[i].faces->faces[tri].desc_args->args[a].type) {
@@ -154,18 +213,13 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                                 fprintf(stderr, "[!] Unidentified material '%s' used in face %d in object %d", scene.objects[i].faces->faces[tri].desc_args->args[a].material, tri, i);
                                 exit(EXIT_FAILURE);
                             }
-                            if (!use_default_materials[(*mesh)[i].materials[tri]]) {
-                                use_default_materials[(*mesh)[i].materials[tri]] = true;
-                                default_material_is[(*mesh)[i].materials[tri]] = num_total_materials++;
-                            }
-                            (*mesh)[i].materials[tri] = default_material_is[(*mesh)[i].materials[tri]];
                         }
-                        material_flag = true;
+                        material_set = true;
                         break;
                     case LIGHTING_DESC_ARG:
                         intensity = scene.objects[i].faces->faces[tri].desc_args->args[a].lighting;
                         (*mesh)[i].lightings[tri] = make_float3(intensity, intensity, intensity); // lighting is effectively a scalar applied to the colour of the object's texture
-                        lighting_flag = true;
+                        lighting_set = true;
                         break;
                     case UV_DESC_ARG:
                         if (scene.objects[i].faces->faces[tri].desc_args->args[a].uvs->len != 3) {
@@ -178,23 +232,27 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                                                                  scene.objects[i].faces->faces[tri].desc_args->args[a].uvs->list[1].y);
                         (*mesh)[i].uv[tri * 3 + 2] = make_float2(scene.objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].x,
                                                                  scene.objects[i].faces->faces[tri].desc_args->args[a].uvs->list[2].y);
-                        uv_flag = true;
+                        uv_set = true;
                         break;
                     default:
                         break;
                 }
             }
-            if (!material_flag) {
+            if (!material_set) {
                 if (object_material_set) (*mesh)[i].materials[tri] = object_material;
                 else {
                     fprintf(stderr, "[!] No material was provided for face %d of object %d, and no material was provided for the object\n", tri, i);
                     exit(EXIT_FAILURE);
                 }
             }
-            if (!lighting_flag) {
-                (*mesh)[i].lightings[tri] = object_lighting_set ? object_lighting : make_float3(0,0,0); // default to unlit or object lighting
+            if (!lighting_set) {
+                if (object_lighting_set) (*mesh)[i].lightings[tri] = object_lighting;
+                else {
+                    float intensity = material_lightings[(*mesh)[i].materials[tri]];
+                    (*mesh)[i].lightings[tri] = make_float3(intensity, intensity, intensity);
+                }
             }
-            if (!uv_flag) {
+            if (!uv_set) {
                 if (object_uvs_set) {
                     (*mesh)[i].uv[tri * 3] = object_uvs[0];
                     (*mesh)[i].uv[tri * 3 + 1] = object_uvs[1];
@@ -211,79 +269,6 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
             (*mesh)[i].vertices[v] = make_float3(now_v.x, now_v.y, now_v.z);
         }
     }
-
-    // Process materials
-    char** texture_paths = (char**) malloc(num_total_materials * sizeof(char*));
-    float* transparencies = (float*) malloc(num_total_materials * sizeof(float)),
-        *crit_angles = (float*) malloc(num_total_materials * sizeof(float)),
-        *refr_indices = (float*) malloc(num_total_materials * sizeof(float)),
-        *smoothnesses = (float*) malloc(num_total_materials * sizeof(float)),
-        *roughnesses = (float*) malloc(num_total_materials * sizeof(float));
-    for (int i = scene.mat_len; i < num_total_materials; i++) { // Load parameters for any default materials used by objects
-        bool material_loaded = false;
-        for (int j = 0; j < NUM_DEFAULT_MATERIALS; j++) {
-            if (default_material_is[j] == i) {
-                load_default_material(j, texture_paths + i, transparencies + i, crit_angles + i, refr_indices + i, smoothnesses + i, roughnesses + i);
-                material_loaded = true;
-                break;
-            }
-        }
-        if (!material_loaded) {
-            fprintf(stderr, "[!] Default material %d (%s) could not be loaded\n", i, default_material_names[i]);
-            exit(EXIT_FAILURE);
-        }
-    }
-    for (int i = 0; i < scene.mat_len; i++) { // Set parameters for explicitly defined materials
-        if (scene.materials[i].base) { // use base material for any unassigned parameters
-            int base_i = find_material(scene.materials[i].base, material_names, i);
-            bool material_loaded = false;
-            if (base_i == INVALID_MATERIAL) { // base material is not a custom material defined before the current material
-                int default_mat_i = find_material(scene.materials[i].base, default_material_names, NUM_DEFAULT_MATERIALS);
-                if (default_mat_i != INVALID_MATERIAL) { // base material was a default material
-                    if (!use_default_materials[default_mat_i]) { // default material has not been loaded in first pass
-                        load_default_material(default_mat_i, texture_paths + i, transparencies + i, crit_angles + i, refr_indices + i, smoothnesses + i, roughnesses + i); // load default material directly and skip loading later
-                        material_loaded = true;
-                    }
-                }
-            }
-            if (!material_loaded) { // base material has not been loaded directly; copy from existing material
-                if (base_i == INVALID_MATERIAL) { // base material was never found and was not loaded directly
-                    fprintf(stderr, "[!] Material #%d '%s' uses nonexistent base material '%s'", i, scene.materials[i].name, scene.materials[i].base);
-                    exit(EXIT_FAILURE);
-                }
-                texture_paths[i] = texture_paths[base_i];
-                transparencies[i] = transparencies[base_i];
-                crit_angles[i] = crit_angles[base_i];
-                refr_indices[i] = refr_indices[base_i];
-                smoothnesses[i] = smoothnesses[base_i];
-                roughnesses[i] = roughnesses[base_i];
-            }
-            if (scene.materials[i].args) { // at least some parameters have been changed from base material
-                if (scene.materials[i].args->texture_path != NULL) texture_paths[i] = scene.materials[i].args->texture_path;
-                if (scene.materials[i].args->transparency != UNASSIGNED) transparencies[i] = scene.materials[i].args->transparency;
-                if (scene.materials[i].args->crit_angle != UNASSIGNED) crit_angles[i] = scene.materials[i].args->crit_angle;
-                if (scene.materials[i].args->refr_index != UNASSIGNED) refr_indices[i] = scene.materials[i].args->refr_index;
-                if (scene.materials[i].args->smoothness != UNASSIGNED) smoothnesses[i] = scene.materials[i].args->smoothness;
-                if (scene.materials[i].args->roughness != UNASSIGNED) roughnesses[i] = scene.materials[i].args->roughness;
-            }
-        } else { // no base material, default to zero
-            if (!scene.materials[i].args) {
-                fprintf(stderr, "[!] Material #%d '%s' has no provided arguments and no base material", i, scene.materials[i].name);
-                exit(EXIT_FAILURE);
-            }
-            if (scene.materials[i].args->texture_path != NULL) texture_paths[i] = scene.materials[i].args->texture_path;
-            else {
-                fprintf(stderr, "[!] Material #%d '%s' has no provided texture and no base material", i, scene.materials[i].name);
-                exit(EXIT_FAILURE);
-            }
-            transparencies[i] = scene.materials[i].args->transparency != UNASSIGNED ? scene.materials[i].args->transparency : 0;
-            crit_angles[i] = scene.materials[i].args->crit_angle != UNASSIGNED ? scene.materials[i].args->crit_angle : 0;
-            refr_indices[i] = scene.materials[i].args->refr_index != UNASSIGNED ? scene.materials[i].args->refr_index : 0;
-            smoothnesses[i] = scene.materials[i].args->smoothness != UNASSIGNED ? scene.materials[i].args->smoothness : 0;
-            roughnesses[i] = scene.materials[i].args->roughness != UNASSIGNED ? scene.materials[i].args->roughness : 0;
-        }
-    }
-    initialise_materials_data(texture_paths, transparencies, crit_angles, refr_indices, smoothnesses, roughnesses, num_total_materials); // Copy material data to device and load textures
     
     // Process rendering parameters
     bool valid, use_x_fov = true;

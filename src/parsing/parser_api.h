@@ -78,6 +78,7 @@ typedef enum {
     REFRINDEX,
     SMOOTHNESS,
     ROUGHNESS,
+    LIGHTING,
 } MatArgType;
 
 typedef struct {
@@ -95,6 +96,7 @@ typedef struct {
     float refr_index;
     float smoothness;
     float roughness;
+    float lighting;
 } MatArgs;
 
 typedef struct {

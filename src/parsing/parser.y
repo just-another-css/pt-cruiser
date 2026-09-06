@@ -186,6 +186,7 @@ mat_args    : mat_args TOK_COMMA mat_arg                { $$ = append_mat_args($
 
 mat_arg     : TOK_TEXTURE TOK_EQUALS TOK_FILEPATH       { $$ = make_mat_texture($3); }
             | TOK_MAT_NUM_ARG TOK_EQUALS TOK_POSFLOAT   { $$ = make_mat_num_arg($1, $3); }
+            | TOK_LIGHTING TOK_EQUALS TOK_POSFLOAT      { $$ = (MatArg) { .type = LIGHTING, .num_val = $3 }; }
             ;
 
 parameter   : TOK_PARAM float                           { $$ = make_float_param($1, $2); }

@@ -18,20 +18,22 @@ float default_transparencies[] =   { LIGHT_SOURCE_TRANSPARENCY, DIFFUSE_TRANSPAR
     default_crit_angles[] =        { LIGHT_SOURCE_CRIT_ANGLE, DIFFUSE_CRIT_ANGLE, DIFFUSE_CRIT_ANGLE, METAL_CRIT_ANGLE, GLASS_CRIT_ANGLE }, // critical angle in radians
     default_refractive_indices[] = { LIGHT_SOURCE_REFRACTIVE_INDEX, DIFFUSE_REFRACTIVE_INDEX, DIFFUSE_REFRACTIVE_INDEX, METAL_REFRACTIVE_INDEX, GLASS_REFRACTIVE_INDEX },
     default_smoothnesses[] =       { LIGHT_SOURCE_SMOOTHNESS, DIFFUSE_SMOOTHNESS, DIFFUSE_SMOOTHNESS, METAL_SMOOTHNESS, GLASS_SMOOTHNESS }, // 0 for Lambertian, 1 for perfectly reflective
-    default_roughnesses[] =        { LIGHT_SOURCE_ROUGHNESS, DIFFUSE_ROUGHNESS, DIFFUSE_ROUGHNESS, METAL_ROUGHNESS, GLASS_ROUGHNESS }; // 0 for specular reflections, 1 for diffuse reflections
+    default_roughnesses[] =        { LIGHT_SOURCE_ROUGHNESS, DIFFUSE_ROUGHNESS, DIFFUSE_ROUGHNESS, METAL_ROUGHNESS, GLASS_ROUGHNESS }, // 0 for specular reflections, 1 for diffuse reflections
+    default_lightings[] =          { LIGHT_SOURCE_LIGHTING, DIFFUSE_LIGHTING, DIFFUSE_LIGHTING, METAL_LIGHTING, GLASS_LIGHTING }; // scalar value, >=0
 
 static MaterialData materials_data_cpy; // global to allow editing in `initialise_material_texture` without copying from device
 static cudaTextureObject_t* material_textures;
  
 __constant__ MaterialData materials_data;
 
-void load_default_material(int material, char** texture_path, float* transparency, float* crit_angle, float* refr_index, float* smoothness, float* roughness) {
+void load_default_material(int material, char** texture_path, float* transparency, float* crit_angle, float* refr_index, float* smoothness, float* roughness, float* lighting) {
     *texture_path = default_texture_paths[material];
     *transparency = default_transparencies[material];
     *crit_angle = default_crit_angles[material];
     *refr_index = default_refractive_indices[material];
     *smoothness = default_smoothnesses[material];
     *roughness = default_roughnesses[material];
+    if (lighting) *lighting = default_lightings[material];
 }
 
 void initialise_materials_data(char** texture_paths, float* transparencies, float* crit_angles, float* refr_indices, float* smoothnesses, float* roughnesses, int num_materials) {

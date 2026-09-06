@@ -229,6 +229,9 @@ MatArg make_mat_num_arg(char* arg, float num_val) {
         case 's':
             res.type = SMOOTHNESS;
             break;
+        case 'l':
+            res.type = LIGHTING;
+            break;
     }
     free(arg); // pointer arg is essentially discarded after this function
     return res;
@@ -267,6 +270,9 @@ MatArgs* append_mat_args(MatArgs* args, MatArg arg) {
             break;
         case ROUGHNESS:
             args->roughness = arg.num_val;
+            break;
+        case LIGHTING:
+            args->lighting = arg.num_val;
             break;
     }
     return args;
