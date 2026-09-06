@@ -78,6 +78,7 @@ __device__ float calc_next_throughput(float3 incoming_ray, float4 surface_normal
 }
 
 __device__ float calc_next_throughput_nee(float3 incoming_ray, float4 surface_normal, float3 new_ray_dir, int material) {
+    if (materials_data.transparencies[material]) { return 1 - materials_data.transparencies[material]; }
     float3 normal = f4_to_f3(surface_normal);
     if (vec_dot_prod(incoming_ray, normal) > 0) scale_vec_ip(-1.0f, &normal);
     // Calculate BRDF
