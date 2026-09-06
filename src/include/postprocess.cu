@@ -220,7 +220,23 @@ static void run_bloom(PostprocessingState ps) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-/* tone map + gamma, run after denoising and bloom */
+// gamma correction without bloom
+__global__ void apply_gamma(const float3* hdr, uchar4* ldr, int width, int height) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) return;
+    int i = y * width + x;
+    float3 p = pow_vec(hdr[i], 1/2.2f);
+
+    ldr[i] = make_uchar4(
+        (unsigned char) min(fmaf(p.x, 255, 0.5f), 255.0f),
+        (unsigned char) min(fmaf(p.y, 255, 0.5f), 255.0f),
+        (unsigned char) min(fmaf(p.z, 255, 0.5f), 255.0f),
+        255
+    );
+}
+
+// gamma correction, applied after combining pixel buffer with bloom buffer
 __global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar4* ldr, int width, int height) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -242,7 +258,8 @@ static void run_gamma_correction(PostprocessingState ps) {
         ((unsigned) ps.width + block.x - 1) / block.x,
         ((unsigned) ps.height + block.y - 1) / block.y
     };
-    apply_gamma_wbloom<<<grid, block>>>(ps.fb->hdr_denoised, ps.fb->bloom_buf, ps.frame_output, ps.width, ps.height);
+    if (ps.use_bloom) apply_gamma_wbloom<<<grid, block>>>(ps.fb->hdr_denoised, ps.fb->bloom_buf, ps.frame_output, ps.width, ps.height);
+    else apply_gamma<<<grid, block>>>(ps.fb->hdr_denoised, ps.frame_output, ps.width, ps.height);
     CUDA_CHECK(cudaGetLastError());
 }
 
