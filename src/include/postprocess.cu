@@ -199,10 +199,10 @@ __global__ void apply_bloom_vertical(const float3* src, float3* dst, int width, 
     float total = 0;
     const float3* src_x = src + x;
     int j_start_offset = min(BLOOM_SIZE, y);
-    int j_limit = y + min(BLOOM_SIZE + 1, height - y);
-    for (int j = y - j_start_offset, b = BLOOM_SIZE - j_start_offset; j < j_limit; j++, b++) {
+    int j_limit = (y + min(BLOOM_SIZE + 1, height - y)) * width;
+    for (int j = (y - j_start_offset) * width, b = BLOOM_SIZE - j_start_offset; j < j_limit; j += width, b++) {
         float weight = bloom_weights[b];
-        add_vec_ip(&acc, scale_vec(weight, src_x[j * width]));
+        add_vec_ip(&acc, scale_vec(weight, src_x[j]));
         total += weight;
     }
     if (total > 0) scale_vec_ip(__frcp_rn(total), &acc);
@@ -221,14 +221,11 @@ static void run_bloom(PostprocessingState ps) {
 }
 
 // gamma correction without bloom
-__global__ void apply_gamma(const float3* hdr, uchar4* ldr, int width, int height) {
+__global__ void apply_gamma(const float3* hdr, uchar4* ldr, int num_pixels) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-    int i = y * width + x;
-    float3 p = pow_vec(hdr[i], 1/2.2f);
-
-    ldr[i] = make_uchar4(
+    if (x >= num_pixels) return;
+    float3 p = pow_vec(hdr[x], 1/2.2f);
+    ldr[x] = make_uchar4(
         (unsigned char) min(fmaf(p.x, 255, 0.5f), 255.0f),
         (unsigned char) min(fmaf(p.y, 255, 0.5f), 255.0f),
         (unsigned char) min(fmaf(p.z, 255, 0.5f), 255.0f),
@@ -237,14 +234,11 @@ __global__ void apply_gamma(const float3* hdr, uchar4* ldr, int width, int heigh
 }
 
 // gamma correction, applied after combining pixel buffer with bloom buffer
-__global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar4* ldr, int width, int height) {
+__global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar4* ldr, int num_pixels) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-    int i = y * width + x;
-    float3 p = pow_vec(add_vec(hdr[i], bloom[i]), 1/2.2f);
-
-    ldr[i] = make_uchar4(
+    if (x >= num_pixels) return;
+    float3 p = pow_vec(add_vec(hdr[x], bloom[x]), 1/2.2f);
+    ldr[x] = make_uchar4(
         (unsigned char) min(fmaf(p.x, 255, 0.5f), 255.0f),
         (unsigned char) min(fmaf(p.y, 255, 0.5f), 255.0f),
         (unsigned char) min(fmaf(p.z, 255, 0.5f), 255.0f),
@@ -253,13 +247,10 @@ __global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar
 }
 
 static void run_gamma_correction(PostprocessingState ps) {
-    dim3 block = { 16, 16 };
-    dim3 grid = {
-        ((unsigned) ps.width + block.x - 1) / block.x,
-        ((unsigned) ps.height + block.y - 1) / block.y
-    };
-    if (ps.use_bloom) apply_gamma_wbloom<<<grid, block>>>(ps.fb->hdr_denoised, ps.fb->bloom_buf, ps.frame_output, ps.width, ps.height);
-    else apply_gamma<<<grid, block>>>(ps.fb->hdr_denoised, ps.frame_output, ps.width, ps.height);
+    dim3 block = { 256 };
+    dim3 grid = { (ps.num_pixels + block.x - 1) / block.x };
+    if (ps.use_bloom) apply_gamma_wbloom<<<grid, block>>>(ps.fb->hdr_denoised, ps.fb->bloom_buf, ps.frame_output, ps.num_pixels);
+    else apply_gamma<<<grid, block>>>(ps.fb->hdr_denoised, ps.frame_output, ps.num_pixels);
     CUDA_CHECK(cudaGetLastError());
 }
 
@@ -269,24 +260,19 @@ void run_postprocessing(PostprocessingState ps) {
     run_gamma_correction(ps);
 }
 
-__global__ void uchar4_to_rgb_planar(const uchar4* src, unsigned char* r_plane, unsigned char* g_plane, unsigned char* b_plane, int width, int height) {
+__global__ void uchar4_to_rgb_planar(const uchar4* src, unsigned char* r_plane, unsigned char* g_plane, unsigned char* b_plane, int num_pixels) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-    int i = y * width + x;
-    uchar4 p = src[i];
-    r_plane[i] = p.x;
-    g_plane[i] = p.y;
-    b_plane[i] = p.z;
+    if (x >= num_pixels) return;
+    uchar4 p = src[x];
+    r_plane[x] = p.x;
+    g_plane[x] = p.y;
+    b_plane[x] = p.z;
 }
 
 void write_image_nvjpeg(PostprocessingState ps, const char* path) {
-    dim3 block = { 16, 16 };
-    dim3 grid = {
-        (ps.width + block.x - 1) / block.x,
-        (ps.height + block.y - 1) / block.y
-    };
-    uchar4_to_rgb_planar<<<grid, block>>>(ps.frame_output, ps.js->r, ps.js->g, ps.js->b, ps.width, ps.height);
+    dim3 block = { 256 };
+    dim3 grid = { (ps.num_pixels + block.x - 1) / block.x };
+    uchar4_to_rgb_planar<<<grid, block>>>(ps.frame_output, ps.js->r, ps.js->g, ps.js->b, ps.num_pixels);
     CUDA_CHECK(cudaDeviceSynchronize());
     NVJPEG_CHECK(nvjpegEncodeImage(ps.js->handle, ps.js->enc_state, ps.js->enc_params, &ps.js->image_desc, NVJPEG_INPUT_RGB, ps.width, ps.height, 0));
     size_t jpeg_buffer_size = ps.js->jpeg_buffer_size;
