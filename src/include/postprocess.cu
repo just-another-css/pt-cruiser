@@ -221,8 +221,8 @@ static void run_bloom(PostprocessingState ps) {
 }
 
 // gamma correction without bloom
-__global__ void apply_gamma(const float3* hdr, uchar4* ldr, int num_pixels) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void apply_gamma(const float3* hdr, uchar4* ldr, size_t num_pixels) {
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= num_pixels) return;
     float3 p = pow_vec(hdr[x], 1/2.2f);
     ldr[x] = make_uchar4(
@@ -234,8 +234,8 @@ __global__ void apply_gamma(const float3* hdr, uchar4* ldr, int num_pixels) {
 }
 
 // gamma correction, applied after combining pixel buffer with bloom buffer
-__global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar4* ldr, int num_pixels) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar4* ldr, size_t num_pixels) {
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= num_pixels) return;
     float3 p = pow_vec(add_vec(hdr[x], bloom[x]), 1/2.2f);
     ldr[x] = make_uchar4(
@@ -260,8 +260,8 @@ void run_postprocessing(PostprocessingState ps) {
     run_gamma_correction(ps);
 }
 
-__global__ void uchar4_to_rgb_planar(const uchar4* src, unsigned char* r_plane, unsigned char* g_plane, unsigned char* b_plane, int num_pixels) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void uchar4_to_rgb_planar(const uchar4* src, unsigned char* r_plane, unsigned char* g_plane, unsigned char* b_plane, size_t num_pixels) {
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
     if (x >= num_pixels) return;
     uchar4 p = src[x];
     r_plane[x] = p.x;
