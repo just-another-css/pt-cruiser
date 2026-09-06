@@ -84,14 +84,15 @@ __device__ float calc_next_throughput_nee(float3 incoming_ray, float4 surface_no
     float3 perfect_reflection = sub_vec(incoming_ray, scale_vec(2 * vec_dot_prod(incoming_ray, normal), normal));
     float cos_alpha = fmax(0.0f, vec_dot_prod(new_ray_dir, perfect_reflection));
 
-    // Set smoothness max to 0.999 to avoid divide by 0
-    float smoothness = fmin(0.999f, materials_data.smoothnesses[material]);
-    float n = (smoothness) / (1.0f - smoothness);
+    float smoothness = materials_data.smoothnesses[material];
+    float roughness = fmin(0.999f, materials_data.roughnesses[material]); // avoid division by zero
+    float n = roughness != 0 ? ((1 - roughness) / roughness) : MAX_N;
     float cos_power = powf(cos_alpha, n);
-    // BRDF = albedo * (n + 2) * cos_power * 1/2π, albedo ignored
-    float brdf = fmaf(n, cos_power, 2 * cos_power) * TWO_PI_RECIPROCAL;
-    float new_ray_normal_angle = vec_dot_prod(normal, new_ray_dir);
-    float lambert_cosine = fmax(0.0f, new_ray_normal_angle);
+    float brdf_diffuse = M_1_PIf;
+    float brdf_specular = fmaf(n, cos_power, 2 * cos_power) * M_2_PIf;
+    float brdf = smoothness * brdf_specular + (1 - smoothness) * brdf_diffuse;
+
+    float lambert_cosine = fabsf(vec_dot_prod(normal, new_ray_dir));
 
     return brdf * lambert_cosine;
 }
