@@ -26,6 +26,13 @@ static cudaTextureObject_t* material_textures;
  
 __constant__ MaterialData materials_data;
 
+typedef struct PathListNode {
+    char* path;
+    struct PathListNode* next;
+} PathListNode;
+
+static PathListNode* materials_texture_paths;
+
 void load_default_material(int material, char** texture_path, float* transparency, float* crit_angle, float* refr_index, float* smoothness, float* roughness, float* lighting) {
     *texture_path = default_texture_paths[material];
     *transparency = default_transparencies[material];
@@ -61,6 +68,31 @@ void initialise_materials_data(char** texture_paths, float* transparencies, floa
 }
 
 void initialise_material_texture(int material_i, char* texture_path) {
+    PathListNode* existing_textures = materials_texture_paths;
+    int i = 0;
+    if (existing_textures) {
+        int j = 0;
+        do {
+            if (!strcmp(existing_textures->path, texture_path)) {
+                CUDA_CHECK(cudaMemcpy(materials_data_cpy.textures + material_i, material_textures + i, sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice));
+                return;
+            }
+            i++;
+            if (existing_textures->next) existing_textures = existing_textures->next;
+            else {
+                existing_textures->next = (PathListNode*) malloc(sizeof(PathListNode));
+                *existing_textures->next = (PathListNode) {
+                    .path = texture_path,
+                };
+                break;
+            }
+        } while (1);
+    } else {
+        materials_texture_paths = (PathListNode*) malloc(sizeof(PathListNode));
+        *materials_texture_paths = (PathListNode) {
+            .path = texture_path,
+        };
+    }
     // Load image to host array
     int x, y, n; // receive image data from stb
     float *texture_data = stbi_loadf(texture_path, &x, &y, &n, 4); // force 4 channels for CUDA texture object compatibility
