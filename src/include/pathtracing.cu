@@ -316,30 +316,31 @@ __global__ static void pathtrace_step(int cur_tile_rays, float3* ray_dirs, float
     float3 ray_origin = ray_origins[x], ray_dir = ray_dirs[x], ray_thrput = ray_throughputs[x]; // copy values for faster access
     if (zero_vec(ray_thrput)) return;
     ray_collision last_ray_collision = last_ray_collisions[x];
-    int lrc_material = objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i];
-    int lrc_smoothness = materials_data.smoothnesses[lrc_material];
-    if (!first_step && lrc_smoothness < NEE_MAX_SMOOTHNESS) {
-        // Sample a light source with NEE
-        int light_source_i, light_source_face_i;
-        float light_source_power, light_source_face_power;
-        int light_source_obj_i = find_rand_light_source(rand_state, &light_source_i, &light_source_power); // get a random light source
-        float3 light_source_ray = calc_rand_ray(light_source_i, light_source_obj_i, ray_origin, rand_state, &light_source_face_i, &light_source_face_power); // calculate a random vector towards the light source
-        float3 light_source_normal = f4_to_f3(objects_dev.meshes[light_source_i].normals[light_source_face_i]);
-        float3 norm_light_source_ray = norm_vec(light_source_ray);
-        ray_collision light_source_ray_rc = find_first_collision(ray_origin, norm_light_source_ray); // check first object in ray direction
-        // if (!x) printf("in step, sampled, applying\n");
-        if (light_source_ray_rc.obj_i == light_source_obj_i && light_source_ray_rc.face_i == light_source_face_i) { // if equal to light source, add contribution
-            TriangleMesh* light_source_mesh = objects_dev.meshes + light_source_obj_i;
-            float2 light_source_uv = add3_vec2(light_source_mesh->uv_a[light_source_ray_rc.face_i], scale_vec2(light_source_ray_rc.u, light_source_mesh->uv_ab[light_source_ray_rc.face_i]), scale_vec2(light_source_ray_rc.v, light_source_mesh->uv_ac[light_source_ray_rc.face_i]));
-            float nee_pdf_value = light_sources_dev.norm_obj_powers[light_source_i] * light_sources_dev.norm_face_powers[light_source_i][light_source_face_i];
-            ray_values[x] = add_vec(ray_values[x], multiply3_vec(scale_vec(calc_next_throughput_nee(ray_dir, objects_dev.meshes[last_ray_collision.obj_i].normals[last_ray_collision.face_i], norm_light_source_ray, objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]) *
-                                                                           fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
-                                                                           calc_dual_importance_sampling_weight(__frcp_rn(nee_pdf_value), calc_brdf_pdf_value(last_ray_collision.obj_i, last_ray_collision.face_i, ray_dir, specular_rays[x])) * // MIS weight
-                                                                           nee_pdf_value *
-                                                                           __frcp_rn(vec_dot_sqr(light_source_ray)), // divide by square of distance to light
-                                                                           ray_thrput), // use material BRDF and NEE ray
-                                                                 objects_dev.meshes[light_source_obj_i].lightings[light_source_face_i], // use object lighting modifier
-                                                                 f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
+    if (!first_step) {
+        int lrc_material = objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i];
+        int lrc_smoothness = materials_data.smoothnesses[lrc_material];
+        if (lrc_smoothness < NEE_MAX_SMOOTHNESS) { // Sample a light source with NEE
+            int light_source_i, light_source_face_i;
+            float light_source_power, light_source_face_power;
+            int light_source_obj_i = find_rand_light_source(rand_state, &light_source_i, &light_source_power); // get a random light source
+            float3 light_source_ray = calc_rand_ray(light_source_i, light_source_obj_i, ray_origin, rand_state, &light_source_face_i, &light_source_face_power); // calculate a random vector towards the light source
+            float3 light_source_normal = f4_to_f3(objects_dev.meshes[light_source_i].normals[light_source_face_i]);
+            float3 norm_light_source_ray = norm_vec(light_source_ray);
+            ray_collision light_source_ray_rc = find_first_collision(ray_origin, norm_light_source_ray); // check first object in ray direction
+            // if (!x) printf("in step, sampled, applying\n");
+            if (light_source_ray_rc.obj_i == light_source_obj_i && light_source_ray_rc.face_i == light_source_face_i) { // if equal to light source, add contribution
+                TriangleMesh* light_source_mesh = objects_dev.meshes + light_source_obj_i;
+                float2 light_source_uv = add3_vec2(light_source_mesh->uv_a[light_source_ray_rc.face_i], scale_vec2(light_source_ray_rc.u, light_source_mesh->uv_ab[light_source_ray_rc.face_i]), scale_vec2(light_source_ray_rc.v, light_source_mesh->uv_ac[light_source_ray_rc.face_i]));
+                float nee_pdf_value = light_sources_dev.norm_obj_powers[light_source_i] * light_sources_dev.norm_face_powers[light_source_i][light_source_face_i];
+                ray_values[x] = add_vec(ray_values[x], multiply3_vec(scale_vec(calc_next_throughput_nee(ray_dir, objects_dev.meshes[last_ray_collision.obj_i].normals[last_ray_collision.face_i], norm_light_source_ray, objects_dev.meshes[last_ray_collision.obj_i].materials[last_ray_collision.face_i]) *
+                                                                            fabsf(vec_dot_prod(norm_light_source_ray, f4_to_f3(light_source_mesh->normals[light_source_ray_rc.face_i]))) * // cos(angle between ray and light face normal)
+                                                                            calc_dual_importance_sampling_weight(__frcp_rn(nee_pdf_value), calc_brdf_pdf_value(last_ray_collision.obj_i, last_ray_collision.face_i, ray_dir, specular_rays[x])) * // MIS weight
+                                                                            nee_pdf_value *
+                                                                            __frcp_rn(vec_dot_sqr(light_source_ray)), // divide by square of distance to light
+                                                                            ray_thrput), // use material BRDF and NEE ray
+                                                                    objects_dev.meshes[light_source_obj_i].lightings[light_source_face_i], // use object lighting modifier
+                                                                    f4_to_f3(tex2D<float4>(materials_data.textures[light_source_mesh->materials[light_source_ray_rc.face_i]], light_source_uv.x, light_source_uv.y)))); // sample light source texture
+            }
         }
     }
     // if (!x) printf("in step, starting pathtracing\n");
