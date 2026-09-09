@@ -28,14 +28,6 @@ static GLuint pbo; // Pixel Buffer Object
 static GLuint textureID;
 static struct cudaGraphicsResource *cuda_pbo_resource;
 
-static FrameBuffers fb;
-static DenoiserState ds;
-static JpegState js;
-
-// Variables to be updated by parsed file accordingly
-// const int img_width = 800;
-// const int img_height = 600;
-
 /* OpenGL & CUDA Initialisation */
 static void init_opengl(int x_res, int y_res) {
     /* Variable Initialisations */
@@ -65,8 +57,6 @@ static void init_opengl(int x_res, int y_res) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
-    /* postprocessing setup */
-    postprocess_init(&fb, &ds, x_res, y_res);
 }
 
 static void init_device(int num_objects, PointsMesh* meshes) {
@@ -94,19 +84,18 @@ static void get_key_input(GLFWwindow* window, RenderParameters* params, float3* 
     ));
 }
 
-static void render_frame(RenderParameters params, char* img_output) {
+static void render_frame(RenderParameters params, PathtraceBuffers* pathtrace_buffers, PostprocessingState ps, char* img_output) {
     size_t num_bytes;
     if (params.use_opengl) {
         CUDA_CHECK(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
-        CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void **) &fb.ldr_buf, &num_bytes, cuda_pbo_resource));
+        CUDA_CHECK(cudaGraphicsResourceGetMappedPointer((void**) &ps.frame_output, &num_bytes, cuda_pbo_resource));
     }
 
-    pathtrace(params.cam_pos, params.cam_up, params.cam_dir, fb.hdr_buf, fb.light_mask,
-        params.x_res, params.y_res, params.pixel_ray_grid_dim, params.pixels_per_tile, params.ray_bounce_limit, params.x_fov);
+    pathtrace(params.cam_pos, params.cam_up, params.cam_dir, ps.frame_input, ps.light_ints, pathtrace_buffers, params.ray_bounce_limit, params.x_fov);
 
     /* postprocessing: denoise -> bloom -> tonemap -> gamma -> ldr_buf */
-    postprocess_run(&fb, &ds, params.use_denoising, params.use_bloom);
-    if (img_output) postprocess_save_jpeg(&fb, &js, img_output);
+    run_postprocessing(ps);
+    if (img_output) write_image_nvjpeg(ps, img_output);
     if (params.use_opengl) {
         CUDA_CHECK(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
@@ -127,8 +116,6 @@ static void render_frame(RenderParameters params, char* img_output) {
 }
 
 static void clean_opengl(void) {
-    postprocess_cleanup(&fb, &ds);
-    postprocess_jpeg_cleanup(&fb, &js);
     cudaGraphicsUnregisterResource(cuda_pbo_resource);
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &textureID);
@@ -176,17 +163,16 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    PostprocessingState ps = init_postprocessing(params.x_res, params.y_res);
+    if (params.use_denoising) init_denoising(&ps);
+    if (params.use_bloom) init_bloom(&ps);
+    if (params.nvjpeg_output) init_nvjpeg(&ps, params.image_quality);
     if (params.use_opengl) init_opengl(params.x_res, params.y_res);
-    if (params.nvjpeg_output) {
-        /* postprocessing setup */
-        postprocess_init(&fb, &ds, params.x_res, params.y_res);
-        postprocess_jpeg_init(&fb, &js, params.image_quality);
-    }
     
     init_device(num_objects, meshes);
-    
-    float3 cam_translation, cam_rotation;
+    PathtraceBuffers* pathtrace_buffers = init_pathtrace(params.x_res, params.y_res, params.pixel_ray_grid_dim, params.pixels_per_tile);
 
+    float3 cam_translation, cam_rotation;
     int frame_count = 0;
     bool loaded_camera_path = cam_path && params.use_cam_path, trace_camera_path = loaded_camera_path && params.start_cam_path, build_camera_path = false;
     if (trace_camera_path) {
@@ -279,21 +265,24 @@ trace:              trace_camera_path = trace_path(cam_path, params.cam_path_fra
                 }
             }
             move_cam(&params, cam_translation, cam_rotation);
-            render_frame(params, nvjpeg_frame_output);
+            render_frame(params, pathtrace_buffers, ps, nvjpeg_frame_output);
             glfwSwapBuffers(window);
             glfwPollEvents();
             if (use_frametime) {
                 calc_frametime(&prev, &cur, &frametime, params.show_frametime);
                 if ((trace_camera_path || build_camera_path) && params.cam_path_framerate) cam_path_fps_scale = frametime / cam_path_frametime;
             }
-            if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) nvjpeg_frame_output = NULL; // prevent saving future frames to file
+            if (nvjpeg_frame_output && params.nvjpeg_first && params.nvjpeg_output) { // prevent saving future frames to file
+                nvjpeg_frame_output = NULL;
+                clean_nvjpeg(&ps);
+            }
             frame_count++;
         }
-        if (params.nvjpeg_last && params.nvjpeg_output) postprocess_save_jpeg(&fb, &js, params.nvjpeg_output);
+        if (params.nvjpeg_last && params.nvjpeg_output) write_image_nvjpeg(ps, params.nvjpeg_output);
     } else {
         do {
 repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path = trace_path(cam_path, params.cam_path_framerate ? (time_diff(start, prev) / cam_path_frametime) : frame_count, cam_path_fps_scale, &params, &cam_translation, &cam_rotation, &trace_camera_path))) printf("[*] Camera path completed at frame %d\n", frame_count);
-            render_frame(params, params.nvjpeg_output);
+            render_frame(params, pathtrace_buffers, ps, params.nvjpeg_output);
             if (use_frametime) {
                 calc_frametime(&prev, &cur, &frametime, params.show_frametime);
                 if (params.cam_path_framerate) cam_path_fps_scale = frametime / cam_path_frametime;
@@ -305,9 +294,10 @@ repeat:     if (loaded_camera_path && trace_camera_path && !(trace_camera_path =
         } while (++frame_count < params.num_frames);
     }
     
+    free_pathtrace(pathtrace_buffers);
     if (cam_path) free_path(cam_path);
     clean_device();
+    clean_postprocessing(&ps);
     if (params.use_opengl) clean_opengl();
-    else postprocess_jpeg_cleanup(&fb, &js);
     return EXIT_SUCCESS;
 }

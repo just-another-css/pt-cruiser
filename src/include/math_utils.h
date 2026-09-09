@@ -118,6 +118,20 @@ __device__ static __forceinline__ float3 multiply6_vec(float3 vec1, float3 vec2,
     return multiply_vec(multiply3_vec(vec1, vec2, vec3), multiply3_vec(vec4, vec5, vec6));
 }
 
+__device__ static __forceinline__ float3 pow_vec(float3 vec, float exp) {
+    return make_float3(
+        __powf(vec.x, exp),
+        __powf(vec.y, exp),
+        __powf(vec.z, exp)
+    );
+}
+
+__device__ static __forceinline__ void pow_vec_ip(float3* vec, float exp) {
+    vec->x = __powf(vec->x, exp);
+    vec->y = __powf(vec->y, exp);
+    vec->z = __powf(vec->z, exp);
+}
+
 __device__ static __forceinline__ float4 f3_to_f4(float3 f3, float w) {
     return make_float4(f3.x, f3.y, f3.z, w);
 }

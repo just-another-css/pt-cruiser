@@ -55,9 +55,8 @@ set_source_files_properties(include/api_wrapper/thrust_wrapper.cu PROPERTIES
     LANGUAGE CUDA
     COMPILE_OPTIONS "--extended-lambda"
 )
-set_target_properties(utils PROPERTIES 
-    LANGUAGE CUDA
-    COMPILE_OPTIONS "-g"
+target_compile_options(utils PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--generate-line-info>
 )
 target_link_libraries(utils PRIVATE
     /usr/local/cuda/targets/x86_64-linux/lib/libnvjpeg.so
@@ -105,7 +104,7 @@ target_link_libraries(renderer PRIVATE
 # Compiler Flags
 target_compile_options(renderer PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-O3 -g -Wall -Werror -pedantic>
-    $<$<COMPILE_LANGUAGE:CUDA>:-O3 --use_fast_math -Xcompiler=-Wall -Xcompiler=-Werror>
+    $<$<COMPILE_LANGUAGE:CUDA>:-O3 --use_fast_math --generate-line-info -Xcompiler=-Wall -Xcompiler=-Werror>
 )
 target_compile_options(renderer PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-Wstrict-prototypes -fsanitize=address -fsanitize=undefined -fno-sanitize-recover>

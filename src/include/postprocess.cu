@@ -4,328 +4,327 @@
 #include <string.h>
 #include "optix_stubs.h"
 #include "optix_function_table_definition.h"
+#include "math_utils.h"
 
-
-__constant__ float bloom_weights[5] = {0.2270f, 0.1945f, 0.1216f, 0.0540f, 0.0162f};
-static void optix_check(OptixResult res, const char *file, int line) {
-    if (res != OPTIX_SUCCESS) {
-        fprintf(stderr, "OptiX error %s:%d: %s\n", file, line, optixGetErrorString(res));
-        exit(EXIT_FAILURE);
-    }
-}
-#define OPTIX_CHECK(x) optix_check((x), __FILE__, __LINE__)
-
-static void optix_log_cb(unsigned int level, const char *tag, const char *msg, void *cbdata) {
-    /* unused */
-    if (level <= 3)
-        fprintf(stderr, "[OptiX][%s] %s\n", tag, msg);
-}
-
-/* horizontal bloom pass: blur light-source pixels along x into bloom_buf */
-__global__ void bloom_horizontal(const float3 *src, float3 *dst,
-                                  const float *mask, int width, int height) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-
-    const float *w = bloom_weights;
-    float3 acc = make_float3(0.0f, 0.0f, 0.0f);
-    float total = 0.0f;
-
-    for (int dx = -4; dx <= 4; dx++) {
-        int nx = x + dx;
-        if (nx < 0 || nx >= width) continue;
-        int idx = y * width + nx;
-        if (mask[idx] == 0.0f) continue;
-        float weight = w[dx < 0 ? -dx : dx];
-        acc.x += src[idx].x * weight;
-        acc.y += src[idx].y * weight;
-        acc.z += src[idx].z * weight;
-        total += weight;
-    }
-    if (total > 0.0f) {
-        acc.x /= total; acc.y /= total; acc.z /= total;
-    }
-    dst[y * width + x] = acc;
-}
-
-/* vertical bloom pass: blur along y into bloom_tmp (separate buffer, no race) */
-__global__ void bloom_vertical(const float3 *src, float3 *dst,
-                                int width, int height) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-
-    const float *w = bloom_weights;
-    float3 acc = make_float3(0.0f, 0.0f, 0.0f);
-    float total = 0.0f;
-
-    for (int dy = -4; dy <= 4; dy++) {
-        int ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        float weight = w[dy < 0 ? -dy : dy];
-        float3 p = src[ny * width + x];
-        acc.x += p.x * weight;
-        acc.y += p.y * weight;
-        acc.z += p.z * weight;
-        total += weight;
-    }
-    if (total > 0.0f) {
-        acc.x /= total; acc.y /= total; acc.z /= total;
-    }
-    dst[y * width + x] = acc;
-}
-
-/* tone map + gamma, run after denoising and bloom */
-__global__ void tonemap_gamma_kernel(const float3 *hdr, const float3 *bloom,
-                                      uchar4 *ldr, int width, int height) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-
-    int idx = y * width + x;
-    float3 p = hdr[idx];
-
-    /* add bloom contribution */
-    p.x += bloom[idx].x;
-    p.y += bloom[idx].y;
-    p.z += bloom[idx].z;
-
-    /* skip Reinhard, values already in 0-1 range */
-    float r = p.x;
-    float g = p.y;
-    float b = p.z;
-
-    float inv_gamma = 1.0f / 2.2f;
-    r = __powf(fmaxf(r, 0.0f), inv_gamma);
-    g = __powf(fmaxf(g, 0.0f), inv_gamma);
-    b = __powf(fmaxf(b, 0.0f), inv_gamma);
-
-    ldr[idx] = make_uchar4(
-        (unsigned char) fminf(r * 255.0f + 0.5f, 255.0f),
-        (unsigned char) fminf(g * 255.0f + 0.5f, 255.0f),
-        (unsigned char) fminf(b * 255.0f + 0.5f, 255.0f),
-        255
-    );
-}
-
-void postprocess_init(FrameBuffers *fb, DenoiserState *ds, int width, int height) {
-    memset(ds, 0, sizeof(DenoiserState));
-    fb->width  = width;
-    fb->height = height;
-
-    size_t npix = (size_t) width * height;
-    CUDA_CHECK(cudaMalloc(&fb->ldr_buf, npix * sizeof(uchar4)));
-    CUDA_CHECK(cudaMalloc(&fb->hdr_buf,      npix * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&fb->hdr_denoised, npix * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&fb->bloom_buf,    npix * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&fb->bloom_tmp,    npix * sizeof(float3)));
-    CUDA_CHECK(cudaMalloc(&fb->light_mask, npix * sizeof(float)));
-
-    CUDA_CHECK(cudaFree(0));
-    OPTIX_CHECK(optixInit());
-
-    OptixDeviceContextOptions ctx_opts;
-    memset(&ctx_opts, 0, sizeof(ctx_opts));
-    ctx_opts.logCallbackFunction = optix_log_cb;
-    ctx_opts.logCallbackLevel    = 4;
-    OPTIX_CHECK(optixDeviceContextCreate(0, &ctx_opts, &ds->context));
-
-    OptixDenoiserOptions denoiser_opts;
-    memset(&denoiser_opts, 0, sizeof(denoiser_opts));
-    denoiser_opts.guideAlbedo = 0;
-    denoiser_opts.guideNormal = 0;
-    OPTIX_CHECK(optixDenoiserCreate(ds->context,
-                                    OPTIX_DENOISER_MODEL_KIND_HDR,
-                                    &denoiser_opts, &ds->denoiser));
-
-    OPTIX_CHECK(optixDenoiserComputeMemoryResources(ds->denoiser,
-                                                    (unsigned) width,
-                                                    (unsigned) height,
-                                                    &ds->sizes));
-
-    CUDA_CHECK(cudaMalloc((void **) &ds->state_buf,   ds->sizes.stateSizeInBytes));
-    CUDA_CHECK(cudaMalloc((void **) &ds->scratch_buf, ds->sizes.withoutOverlapScratchSizeInBytes));
-    CUDA_CHECK(cudaMalloc((void **) &ds->intensity,   sizeof(float)));
-
-    OPTIX_CHECK(optixDenoiserSetup(ds->denoiser, 0,
-                                   (unsigned) width, (unsigned) height,
-                                   ds->state_buf,    ds->sizes.stateSizeInBytes,
-                                   ds->scratch_buf,  ds->sizes.withoutOverlapScratchSizeInBytes));
-    ds->ready = 1;
-}
-
-void postprocess_cleanup(FrameBuffers *fb, DenoiserState *ds) {
-    if (fb->hdr_buf)      { cudaFree(fb->hdr_buf);      fb->hdr_buf      = NULL; }
-    if (fb->hdr_denoised) { cudaFree(fb->hdr_denoised); fb->hdr_denoised = NULL; }
-    if (fb->bloom_buf)    { cudaFree(fb->bloom_buf);    fb->bloom_buf    = NULL; }
-    if (fb->bloom_tmp)    { cudaFree(fb->bloom_tmp);    fb->bloom_tmp    = NULL; }
-    if (fb->light_mask)   { cudaFree(fb->light_mask);   fb->light_mask   = NULL; }
-    if (fb->ldr_buf) {
-        cudaFree(fb->ldr_buf);
-    }
-
-    if (ds->ready) {
-        cudaFree((void *) ds->intensity);
-        cudaFree((void *) ds->scratch_buf);
-        cudaFree((void *) ds->state_buf);
-        optixDenoiserDestroy(ds->denoiser);
-        optixDeviceContextDestroy(ds->context);
-        ds->ready = 0;
-    }
-}
-
-void postprocess_denoise(FrameBuffers *fb, DenoiserState *ds) {
-    if (!ds->ready) return;
-
-    OptixDenoiserLayer layer;
-    memset(&layer, 0, sizeof(layer));
-    layer.input.data               = (CUdeviceptr) fb->hdr_buf;
-    layer.input.width              = (unsigned) fb->width;
-    layer.input.height             = (unsigned) fb->height;
-    layer.input.rowStrideInBytes   = (unsigned) (fb->width * sizeof(float3));
-    layer.input.pixelStrideInBytes = sizeof(float3);
-    layer.input.format             = OPTIX_PIXEL_FORMAT_FLOAT3;
-    layer.output = layer.input;
-    layer.output.data = (CUdeviceptr) fb->hdr_denoised;
-
-    OPTIX_CHECK(optixDenoiserComputeIntensity(ds->denoiser, 0, &layer.input,
-                                              ds->intensity, ds->scratch_buf,
-                                              ds->sizes.withoutOverlapScratchSizeInBytes));
-
-    OptixDenoiserParams params;
-    memset(&params, 0, sizeof(params));
-    params.hdrIntensity = ds->intensity;
-    params.blendFactor  = 0.0f;
-    OptixDenoiserGuideLayer guide;
-    memset(&guide, 0, sizeof(guide));
-
-    OPTIX_CHECK(optixDenoiserInvoke(ds->denoiser, 0, &params,
-                                    ds->state_buf, ds->sizes.stateSizeInBytes,
-                                    &guide, &layer, 1, 0, 0,
-                                    ds->scratch_buf,
-                                    ds->sizes.withoutOverlapScratchSizeInBytes));
-    CUDA_CHECK(cudaDeviceSynchronize());
-}
-
-void postprocess_bloom(FrameBuffers *fb) {
-    size_t npix = (size_t) fb->width * fb->height;
-    CUDA_CHECK(cudaMemset(fb->bloom_tmp, 0, npix * sizeof(float3)));
-
-    dim3 block = {16, 16, 1};
-    dim3 grid = {
-        ((unsigned) fb->width  + block.x - 1) / block.x,
-        ((unsigned) fb->height + block.y - 1) / block.y,
-        1
-    };
-    bloom_horizontal<<<grid, block>>>(fb->hdr_denoised, fb->bloom_buf,
-                                      fb->light_mask, fb->width, fb->height);
-    CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    bloom_vertical<<<grid, block>>>(fb->bloom_buf, fb->bloom_tmp,
-                                    fb->width, fb->height);
-    CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
-}
-
-void postprocess_tonemap_gamma(FrameBuffers *fb) {
-    dim3 block = {16, 16, 1};
-    dim3 grid = {
-        ((unsigned) fb->width  + block.x - 1) / block.x,
-        ((unsigned) fb->height + block.y - 1) / block.y,
-        1
-    };
-    tonemap_gamma_kernel<<<grid, block>>>(fb->hdr_denoised, fb->bloom_tmp,
-                                          fb->ldr_buf, fb->width, fb->height);
-    CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
-}
-
-void postprocess_run(FrameBuffers *fb, DenoiserState *ds, bool use_denoising, bool use_bloom) {
-    if (use_denoising) postprocess_denoise(fb, ds);
-    else CUDA_CHECK(cudaMemcpy(fb->hdr_denoised, fb->hdr_buf, fb->width * fb->height * sizeof(float3), cudaMemcpyDeviceToDevice));
-    if (use_bloom) postprocess_bloom(fb);
-    else CUDA_CHECK(cudaMemset(fb->bloom_tmp, 0, fb->width * fb->height * sizeof(float3))); // zero input array before tonemapping
-    postprocess_tonemap_gamma(fb);
-}
-
-#define NVJPEG_CHECK(x) do { \
-    nvjpegStatus_t _s = (x); \
-    if (_s != NVJPEG_STATUS_SUCCESS) { \
-        fprintf(stderr, "nvJPEG error %s:%d : %d\n", __FILE__, __LINE__, (int)_s); \
+#define OPTIX_CHECK(code) { \
+    OptixResult result = code; \
+    if (result != OPTIX_SUCCESS) { \
+        fprintf(stderr, "OptiX error %s:%d: %s\n", __FILE__, __LINE__, optixGetErrorString(result)); \
         exit(EXIT_FAILURE); \
     } \
-} while (0)
-
-__global__ void uchar4_to_rgb_planar(const uchar4 *src,
-                                      unsigned char *r_plane,
-                                      unsigned char *g_plane,
-                                      unsigned char *b_plane,
-                                      int width, int height) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-    int idx = y * width + x;
-    uchar4 p = src[idx];
-    r_plane[idx] = p.x;
-    g_plane[idx] = p.y;
-    b_plane[idx] = p.z;
 }
 
-void postprocess_jpeg_init(FrameBuffers *fb, JpegState *js, int quality) {
-    memset(js, 0, sizeof(JpegState));
-    js->quality = quality > 0 ? quality : 90;
-    size_t npix = (size_t) fb->width * fb->height;
-    CUDA_CHECK(cudaMalloc(&fb->jpeg_rgb_buf, npix * 3));
+#define NVJPEG_CHECK(code) { \
+    nvjpegStatus_t result = code; \
+    if (result != NVJPEG_STATUS_SUCCESS) { \
+        fprintf(stderr, "nvJPEG error %s:%d : %d\n", __FILE__, __LINE__, (int)result); \
+        exit(EXIT_FAILURE); \
+    } \
+}
+
+#define BLOOM_SIZE 4
+__constant__ float bloom_weights[9] = { 0.0162f, 0.0540f, 0.1216, 0.1945f, 0.2270f, 0.1945f, 0.1216f, 0.0540f, 0.0162f };
+
+#define OPTIMISED_HUFFMAN 1
+
+struct FrameBuffers {
+    float3* hdr_buf; // HDR input from renderer
+    float3* hdr_denoised; // denoiser output (separate buffer, required by OptiX)
+    float3* bloom_tmp;
+    float3* bloom_buf; // vertical bloom pass output, fed into tonemap
+    float* light_mask; // 1 if pixel is a direct light source, else 0
+    uchar4* ldr_buf; // mapped PBO, set each frame
+};
+
+struct DenoiserState {
+    OptixDeviceContext context;
+    OptixDenoiser denoiser;
+    OptixDenoiserLayer* layer;
+    OptixDenoiserGuideLayer* guide;
+    OptixDenoiserParams params;
+    OptixDenoiserSizes sizes;
+    CUdeviceptr state_buf;
+    CUdeviceptr scratch_buf;
+    CUdeviceptr intensity;
+};
+
+struct nvJpegState {
+    unsigned char* rgb_frame; // planar RGB device buffer for nvJPEG
+    unsigned char *r, *g, *b; // pointers to R/G/B planes within rgb_frame
+    unsigned char* jpeg_buffer;
+    size_t jpeg_buffer_size;
+    nvjpegHandle_t handle;
+    nvjpegEncoderState_t enc_state;
+    nvjpegEncoderParams_t enc_params;
+    nvjpegImage_t image_desc;
+    int quality;
+};
+
+PostprocessingState init_postprocessing(int width, int height) {
+    PostprocessingState ps = {
+        .fb = (FrameBuffers*) malloc(sizeof(FrameBuffers)),
+        .width = width,
+        .height = height,
+        .num_pixels = (size_t) width * height,
+    };
+    memset(ps.fb, 0, sizeof(FrameBuffers));
+    CUDA_CHECK(cudaMalloc(&ps.fb->hdr_denoised, ps.num_pixels * sizeof(float3)));
+    CUDA_CHECK(cudaMalloc(&ps.fb->bloom_buf, ps.num_pixels * sizeof(float3)));
+    CUDA_CHECK(cudaMemset(ps.fb->bloom_buf, 0, ps.num_pixels * sizeof(float3))); // zero buffer in case bloom is not used
+    CUDA_CHECK(cudaMalloc(&ps.fb->light_mask, ps.num_pixels * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&ps.fb->ldr_buf, ps.num_pixels * sizeof(uchar4)));
+    ps.frame_input = ps.fb->hdr_denoised;
+    ps.light_ints = ps.fb->light_mask;
+    ps.frame_output = ps.fb->ldr_buf;
+    return ps;
+}
+
+static void optix_log_cb(unsigned int level, const char* tag, const char* msg, void* cbdata) {
+    if (level <= 3) fprintf(stderr, "[OptiX] %s: %s\n", tag, msg);
+}
+
+void init_denoising(PostprocessingState* ps) {
+    // allocate separate pre-denoising buffer to write frame to during pathtracing
+    CUDA_CHECK(cudaMalloc(&ps->fb->hdr_buf, ps->num_pixels * sizeof(float3)));
+    ps->frame_input = ps->fb->hdr_buf;
+    ps->ds = (DenoiserState*) malloc(sizeof(DenoiserState));
+    DenoiserState* ds = ps->ds;
+    memset(ds, 0, sizeof(DenoiserState));
+
+    OPTIX_CHECK(optixInit());
+    OptixDeviceContextOptions ctx_opts = (OptixDeviceContextOptions) {
+        .logCallbackFunction = optix_log_cb,
+        .logCallbackLevel = 3,
+    };
+    OPTIX_CHECK(optixDeviceContextCreate(0, &ctx_opts, &ds->context));
+
+    OptixDenoiserOptions denoiser_opts = (OptixDenoiserOptions) {
+        .guideAlbedo = 0,
+        .guideNormal = 0,
+    };
+    OPTIX_CHECK(optixDenoiserCreate(ds->context, OPTIX_DENOISER_MODEL_KIND_HDR, &denoiser_opts, &ds->denoiser));
+
+    OPTIX_CHECK(optixDenoiserComputeMemoryResources(ds->denoiser, ps->width, ps->height, &ds->sizes));
+    CUDA_CHECK(cudaMalloc((void**) &ds->state_buf, ds->sizes.stateSizeInBytes));
+    CUDA_CHECK(cudaMalloc((void**) &ds->scratch_buf, ds->sizes.withoutOverlapScratchSizeInBytes));
+    CUDA_CHECK(cudaMalloc((void**) &ds->intensity, sizeof(float)));
+    OPTIX_CHECK(optixDenoiserSetup(ds->denoiser, 0, ps->width, ps->height, ds->state_buf, ds->sizes.stateSizeInBytes, ds->scratch_buf, ds->sizes.withoutOverlapScratchSizeInBytes));
+
+    ds->layer = (OptixDenoiserLayer*) malloc(sizeof(OptixDenoiserLayer));
+    OptixDenoiserLayer* layer = ds->layer;
+    memset(layer, 0, sizeof(OptixDenoiserLayer));
+    layer->input.data = (CUdeviceptr) ps->fb->hdr_buf;
+    layer->input.width = (unsigned) ps->width;
+    layer->input.height = (unsigned) ps->height;
+    layer->input.rowStrideInBytes = (unsigned) (ps->width * sizeof(float3));
+    layer->input.pixelStrideInBytes = sizeof(float3);
+    layer->input.format = OPTIX_PIXEL_FORMAT_FLOAT3;
+    layer->output = layer->input;
+    layer->output.data = (CUdeviceptr) ps->fb->hdr_denoised;
+
+    ds->guide = (OptixDenoiserGuideLayer*) malloc(sizeof(OptixDenoiserGuideLayer));
+    memset(ds->guide, 0, sizeof(OptixDenoiserGuideLayer));
+
+    memset(&ds->params, 0, sizeof(OptixDenoiserParams));
+    ds->params.blendFactor = 0;
+}
+
+void init_bloom(PostprocessingState* ps) {
+    ps->use_bloom = true;
+    CUDA_CHECK(cudaMalloc(&ps->fb->bloom_tmp, ps->num_pixels * sizeof(float3)));
+}
+
+void init_nvjpeg(PostprocessingState* ps, int quality) {
+    ps->js = (nvJpegState*) malloc(sizeof(nvJpegState));
+    nvJpegState* js = ps->js;
+    memset(js, 0, sizeof(nvJpegState));
+    js->quality = quality;
+    CUDA_CHECK(cudaMalloc(&js->rgb_frame, ps->num_pixels * 3));
+    js->r = js->rgb_frame;
+    js->g = js->rgb_frame + ps->num_pixels;
+    js->b = js->rgb_frame + ps->num_pixels * 2;
+
     NVJPEG_CHECK(nvjpegCreateSimple(&js->handle));
     NVJPEG_CHECK(nvjpegEncoderStateCreate(js->handle, &js->enc_state, 0));
     NVJPEG_CHECK(nvjpegEncoderParamsCreate(js->handle, &js->enc_params, 0));
     NVJPEG_CHECK(nvjpegEncoderParamsSetQuality(js->enc_params, js->quality, 0));
-    NVJPEG_CHECK(nvjpegEncoderParamsSetOptimizedHuffman(js->enc_params, 1, 0));
+    NVJPEG_CHECK(nvjpegEncoderParamsSetOptimizedHuffman(js->enc_params, OPTIMISED_HUFFMAN, 0));
     NVJPEG_CHECK(nvjpegEncoderParamsSetSamplingFactors(js->enc_params, NVJPEG_CSS_444, 0));
-    js->ready = 1;
+    memset(&js->image_desc, 0, sizeof(nvjpegImage_t));
+    js->image_desc.channel[0] = js->r;
+    js->image_desc.channel[1] = js->g;
+    js->image_desc.channel[2] = js->b;
+    js->image_desc.pitch[0] = ps->width;
+    js->image_desc.pitch[1] = ps->width;
+    js->image_desc.pitch[2] = ps->width;
+
+    NVJPEG_CHECK(nvjpegEncodeGetBufferSize(js->handle, js->enc_params, ps->width, ps->height, &js->jpeg_buffer_size));
+    js->jpeg_buffer = (unsigned char*) malloc(js->jpeg_buffer_size);
 }
 
-void postprocess_jpeg_cleanup(FrameBuffers *fb, JpegState *js) {
-    if (fb->jpeg_rgb_buf) { cudaFree(fb->jpeg_rgb_buf); fb->jpeg_rgb_buf = NULL; }
-    if (js->ready) {
-        nvjpegEncoderParamsDestroy(js->enc_params);
-        nvjpegEncoderStateDestroy(js->enc_state);
-        nvjpegDestroy(js->handle);
-        js->ready = 0;
+static void run_denoising(PostprocessingState ps) {
+    OptixDenoiserLayer* layer = ps.ds->layer;
+    OPTIX_CHECK(optixDenoiserComputeIntensity(ps.ds->denoiser, 0, &layer->input, ps.ds->intensity, ps.ds->scratch_buf, ps.ds->sizes.withoutOverlapScratchSizeInBytes));
+    ps.ds->params.hdrIntensity = ps.ds->intensity;
+    OPTIX_CHECK(optixDenoiserInvoke(ps.ds->denoiser, 0, &ps.ds->params, ps.ds->state_buf, ps.ds->sizes.stateSizeInBytes, ps.ds->guide, layer, 1, 0, 0, ps.ds->scratch_buf, ps.ds->sizes.withoutOverlapScratchSizeInBytes));
+}
+
+/* horizontal bloom pass: blur light-source pixels along x into bloom_tmp */
+__global__ void apply_bloom_horizontal(const float3* src, float3* dst, const float* mask, int width, int height) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) return;
+    float3 acc = make_float3(0,0,0);
+    float total = 0;
+    int i = y * width + x;
+    int j_start_offset = min(BLOOM_SIZE, x);
+    int j_limit = i + min(BLOOM_SIZE + 1, width - x);
+    for (int j = i - j_start_offset, b = BLOOM_SIZE - j_start_offset; j < j_limit; j++, b++) {
+        if (mask[j]) {
+            float weight = bloom_weights[b];
+            add_vec_ip(&acc, scale_vec(weight, src[j]));
+            total += weight;
+        }
     }
+    if (total > 0) scale_vec_ip(__frcp_rn(total), &acc);
+    dst[i] = acc;
 }
 
-void postprocess_save_jpeg(FrameBuffers *fb, JpegState *js, const char *path) {
-    if (!js->ready) { fprintf(stderr, "postprocess_save_jpeg: not initialised\n"); return; }
-    int width = fb->width, height = fb->height;
-    size_t npix = (size_t) width * height;
-    dim3 block = {16, 16, 1};
-    dim3 grid = {((unsigned)width+15)/16, ((unsigned)height+15)/16, 1};
-    unsigned char *r_plane = fb->jpeg_rgb_buf;
-    unsigned char *g_plane = fb->jpeg_rgb_buf + npix;
-    unsigned char *b_plane = fb->jpeg_rgb_buf + npix * 2;
-    uchar4_to_rgb_planar<<<grid, block>>>(fb->ldr_buf, r_plane, g_plane, b_plane, width, height);
+/* vertical bloom pass: blur along y into bloom_buf (separate buffer, no race) */
+__global__ void apply_bloom_vertical(const float3* src, float3* dst, int width, int height) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) return;
+    float3 acc = make_float3(0,0,0);
+    float total = 0;
+    const float3* src_x = src + x;
+    int j_start_offset = min(BLOOM_SIZE, y);
+    int j_limit = (y + min(BLOOM_SIZE + 1, height - y)) * width;
+    for (int j = (y - j_start_offset) * width, b = BLOOM_SIZE - j_start_offset; j < j_limit; j += width, b++) {
+        float weight = bloom_weights[b];
+        add_vec_ip(&acc, scale_vec(weight, src_x[j]));
+        total += weight;
+    }
+    if (total > 0) scale_vec_ip(__frcp_rn(total), &acc);
+    dst[y * width + x] = acc;
+}
+
+static void run_bloom(PostprocessingState ps) {
+    dim3 block = { 16, 16 };
+    dim3 grid = {
+        (ps.width + block.x - 1) / block.x,
+        (ps.height + block.y - 1) / block.y
+    };
+    apply_bloom_horizontal<<<grid, block>>>(ps.fb->hdr_denoised, ps.fb->bloom_tmp, ps.fb->light_mask, ps.width, ps.height);
+    apply_bloom_vertical<<<grid, block>>>(ps.fb->bloom_tmp, ps.fb->bloom_buf, ps.width, ps.height);
     CUDA_CHECK(cudaGetLastError());
+}
+
+// gamma correction without bloom
+__global__ void apply_gamma(const float3* hdr, uchar4* ldr, size_t num_pixels) {
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= num_pixels) return;
+    float3 p = pow_vec(hdr[x], 1/2.2f);
+    ldr[x] = make_uchar4(
+        (unsigned char) min(fmaf(p.x, 255, 0.5f), 255.0f),
+        (unsigned char) min(fmaf(p.y, 255, 0.5f), 255.0f),
+        (unsigned char) min(fmaf(p.z, 255, 0.5f), 255.0f),
+        255
+    );
+}
+
+// gamma correction, applied after combining pixel buffer with bloom buffer
+__global__ void apply_gamma_wbloom(const float3* hdr, const float3* bloom, uchar4* ldr, size_t num_pixels) {
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= num_pixels) return;
+    float3 p = pow_vec(add_vec(hdr[x], bloom[x]), 1/2.2f);
+    ldr[x] = make_uchar4(
+        (unsigned char) min(fmaf(p.x, 255, 0.5f), 255.0f),
+        (unsigned char) min(fmaf(p.y, 255, 0.5f), 255.0f),
+        (unsigned char) min(fmaf(p.z, 255, 0.5f), 255.0f),
+        255
+    );
+}
+
+static void run_gamma_correction(PostprocessingState ps) {
+    dim3 block = { 256 };
+    dim3 grid = { (ps.num_pixels + block.x - 1) / block.x };
+    if (ps.use_bloom) apply_gamma_wbloom<<<grid, block>>>(ps.fb->hdr_denoised, ps.fb->bloom_buf, ps.frame_output, ps.num_pixels);
+    else apply_gamma<<<grid, block>>>(ps.fb->hdr_denoised, ps.frame_output, ps.num_pixels);
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void run_postprocessing(PostprocessingState ps) {
+    if (ps.ds) run_denoising(ps);
+    if (ps.use_bloom) run_bloom(ps);
+    run_gamma_correction(ps);
+}
+
+__global__ void uchar4_to_rgb_planar(const uchar4* src, unsigned char* r_plane, unsigned char* g_plane, unsigned char* b_plane, size_t num_pixels) {
+    size_t x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= num_pixels) return;
+    uchar4 p = src[x];
+    r_plane[x] = p.x;
+    g_plane[x] = p.y;
+    b_plane[x] = p.z;
+}
+
+void write_image_nvjpeg(PostprocessingState ps, const char* path) {
+    dim3 block = { 256 };
+    dim3 grid = { (ps.num_pixels + block.x - 1) / block.x };
+    uchar4_to_rgb_planar<<<grid, block>>>(ps.frame_output, ps.js->r, ps.js->g, ps.js->b, ps.num_pixels);
     CUDA_CHECK(cudaDeviceSynchronize());
-    nvjpegImage_t img;
-    memset(&img, 0, sizeof(img));
-    img.channel[0] = r_plane; img.pitch[0] = (unsigned) width;
-    img.channel[1] = g_plane; img.pitch[1] = (unsigned) width;
-    img.channel[2] = b_plane; img.pitch[2] = (unsigned) width;
-    NVJPEG_CHECK(nvjpegEncodeImage(js->handle, js->enc_state, js->enc_params,
-                                    &img, NVJPEG_INPUT_RGB, width, height, 0));
+    NVJPEG_CHECK(nvjpegEncodeImage(ps.js->handle, ps.js->enc_state, ps.js->enc_params, &ps.js->image_desc, NVJPEG_INPUT_RGB, ps.width, ps.height, 0));
+    size_t jpeg_buffer_size = ps.js->jpeg_buffer_size;
+    NVJPEG_CHECK(nvjpegEncodeRetrieveBitstream(ps.js->handle, ps.js->enc_state, ps.js->jpeg_buffer, &jpeg_buffer_size, 0));
     CUDA_CHECK(cudaDeviceSynchronize());
-    size_t jpeg_size = 0;
-    NVJPEG_CHECK(nvjpegEncodeRetrieveBitstream(js->handle, js->enc_state, NULL, &jpeg_size, 0));
-    unsigned char *host_buf = (unsigned char *) malloc(jpeg_size);
-    MALLOC_CHECK(host_buf);
-    NVJPEG_CHECK(nvjpegEncodeRetrieveBitstream(js->handle, js->enc_state, host_buf, &jpeg_size, 0));
-    CUDA_CHECK(cudaDeviceSynchronize());
-    FILE *fp = fopen(path, "wb");
-    if (!fp) { fprintf(stderr, "cannot open %s\n", path); free(host_buf); return; }
-    fwrite(host_buf, 1, jpeg_size, fp);
-    fclose(fp);
-    free(host_buf);
+    FILE* jpeg_file = fopen(path, "wb");
+    if (!jpeg_file) { fprintf(stderr, "[!] Error: Cannot open '%s' to write JPEG\n", path); return; }
+    fwrite(ps.js->jpeg_buffer, 1, jpeg_buffer_size, jpeg_file);
+    fclose(jpeg_file);
+}
+
+void clean_postprocessing(PostprocessingState* ps) {
+    if (ps->ds) clean_denoising(ps);
+    if (ps->js) clean_nvjpeg(ps);
+    if (ps->fb) clean_buffers(ps); // clear buffers after all associated denoiser/nvJPEG resources destroyed
+    ps->frame_input = NULL;
+    ps->light_ints = NULL;
+    ps->frame_output = NULL;
+}
+
+void clean_buffers(PostprocessingState* ps) {
+    FrameBuffers* fb = ps->fb;
+    CUDA_CHECK(cudaFree(fb->hdr_buf));
+    CUDA_CHECK(cudaFree(fb->hdr_denoised));
+    CUDA_CHECK(cudaFree(fb->bloom_tmp));
+    CUDA_CHECK(cudaFree(fb->bloom_buf));
+    CUDA_CHECK(cudaFree(fb->light_mask));
+    CUDA_CHECK(cudaFree(fb->ldr_buf));
+    free(fb);
+    ps->fb = NULL;
+}
+
+void clean_denoising(PostprocessingState* ps) {
+    DenoiserState* ds = ps->ds;
+    CUDA_CHECK(cudaFree((void*) ds->intensity));
+    CUDA_CHECK(cudaFree((void*) ds->scratch_buf));
+    CUDA_CHECK(cudaFree((void*) ds->state_buf));
+    OPTIX_CHECK(optixDenoiserDestroy(ds->denoiser));
+    OPTIX_CHECK(optixDeviceContextDestroy(ds->context));
+    free(ds->layer);
+    free(ds->guide);
+    free(ds);
+    ps->ds = NULL;
+}
+
+void clean_nvjpeg(PostprocessingState* ps) {
+    nvJpegState* js = ps->js;
+    CUDA_CHECK(cudaFree(js->rgb_frame));
+    NVJPEG_CHECK(nvjpegEncoderParamsDestroy(js->enc_params));
+    NVJPEG_CHECK(nvjpegEncoderStateDestroy(js->enc_state));
+    NVJPEG_CHECK(nvjpegDestroy(js->handle));
+    free(js->jpeg_buffer);
+    free(js);
+    ps->js = NULL;
 }
