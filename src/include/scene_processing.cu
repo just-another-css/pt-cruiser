@@ -173,7 +173,7 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                         if (object_material == INVALID_MATERIAL) {
                             fprintf(stderr, "[!] Unidentified material '%s' used in object %d", scene.objects[i].desc_args->args[a].material, i);
                             exit(EXIT_FAILURE);
-                        }
+                        } else object_material += scene.mat_len;
                     }
                     object_material_set = true;
                     break;
@@ -212,7 +212,7 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                             if ((*mesh)[i].materials[tri] == INVALID_MATERIAL) {
                                 fprintf(stderr, "[!] Unidentified material '%s' used in face %d in object %d", scene.objects[i].faces->faces[tri].desc_args->args[a].material, tri, i);
                                 exit(EXIT_FAILURE);
-                            }
+                            } else (*mesh)[i].materials[tri] += scene.mat_len;
                         }
                         material_set = true;
                         break;
