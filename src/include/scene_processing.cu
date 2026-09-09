@@ -96,7 +96,7 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
             }
             if (!material_loaded) { // base material has not been loaded directly; copy from existing material
                 if (base_i == INVALID_MATERIAL) { // base material was never found and was not loaded directly
-                    fprintf(stderr, "[!] Material #%d '%s' uses nonexistent base material '%s'", i, scene.materials[i].name, scene.materials[i].base);
+                    fprintf(stderr, "[!] Material #%d '%s' uses nonexistent base material '%s'\n", i, scene.materials[i].name, scene.materials[i].base);
                     exit(EXIT_FAILURE);
                 }
                 texture_paths[i] = texture_paths[base_i];
@@ -118,12 +118,12 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
             }
         } else { // no base material, default to zero
             if (!scene.materials[i].args) {
-                fprintf(stderr, "[!] Material #%d '%s' has no provided arguments and no base material", i, scene.materials[i].name);
+                fprintf(stderr, "[!] Material #%d '%s' has no provided arguments and no base material\n", i, scene.materials[i].name);
                 exit(EXIT_FAILURE);
             }
             if (scene.materials[i].args->texture_path != NULL) texture_paths[i] = scene.materials[i].args->texture_path;
             else {
-                fprintf(stderr, "[!] Material #%d '%s' has no provided texture and no base material", i, scene.materials[i].name);
+                fprintf(stderr, "[!] Material #%d '%s' has no provided texture and no base material\n", i, scene.materials[i].name);
                 exit(EXIT_FAILURE);
             }
             transparencies[i] = scene.materials[i].args->transparency != UNASSIGNED ? scene.materials[i].args->transparency : 0;
@@ -171,7 +171,7 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                     if (object_material == INVALID_MATERIAL) {
                         object_material = find_material(scene.objects[i].desc_args->args[a].material, default_material_names, NUM_DEFAULT_MATERIALS);
                         if (object_material == INVALID_MATERIAL) {
-                            fprintf(stderr, "[!] Unidentified material '%s' used in object %d", scene.objects[i].desc_args->args[a].material, i);
+                            fprintf(stderr, "[!] Unidentified material '%s' used in object %d\n", scene.objects[i].desc_args->args[a].material, i);
                             exit(EXIT_FAILURE);
                         } else object_material += scene.mat_len;
                     }
@@ -210,7 +210,7 @@ void process_scene(int* num_objects, PointsMesh** mesh, RenderParameters* params
                         if ((*mesh)[i].materials[tri] == INVALID_MATERIAL) {
                             (*mesh)[i].materials[tri] = find_material(scene.objects[i].faces->faces[tri].desc_args->args[a].material, default_material_names, NUM_DEFAULT_MATERIALS);
                             if ((*mesh)[i].materials[tri] == INVALID_MATERIAL) {
-                                fprintf(stderr, "[!] Unidentified material '%s' used in face %d in object %d", scene.objects[i].faces->faces[tri].desc_args->args[a].material, tri, i);
+                                fprintf(stderr, "[!] Unidentified material '%s' used in face %d in object %d\n", scene.objects[i].faces->faces[tri].desc_args->args[a].material, tri, i);
                                 exit(EXIT_FAILURE);
                             } else (*mesh)[i].materials[tri] += scene.mat_len;
                         }
